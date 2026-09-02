@@ -1,0 +1,50 @@
+name: Deploy demo to Pages
+
+on:
+  push:
+    branches: [main]
+    # Only rebuild when something the demo actually renders has changed.
+    paths:
+      - 'data/**'
+      - 'tools/demo-mock.js'
+      - 'tools/make-demo.sh'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; let an in-flight one finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the shipped UI parses before publishing it
+        run: node --check data/app.js
+
+      - name: Assemble the demo
+        run: bash tools/make-demo.sh build/demo
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/demo
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

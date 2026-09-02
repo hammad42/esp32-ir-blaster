@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Wiring and hardware questions
+    url: https://github.com/hammad42/esp32-ir-blaster/blob/main/docs/HARDWARE.md
+    about: Pin maps, schematics, transistor pinouts and range tuning.
+  - name: It captures but the appliance ignores it
+    url: https://github.com/hammad42/esp32-ir-blaster/blob/main/docs/USAGE.md#it-learns-but-the-appliance-ignores-it
+    about: An ordered checklist that resolves most of these.
+  - name: Questions and ideas
+    url: https://github.com/hammad42/esp32-ir-blaster/discussions
+    about: For anything that is not a bug report or a concrete proposal.

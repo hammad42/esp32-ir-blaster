@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12151a">
+<title>IR Blaster</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="dot" id="dot-live"></span>
+    <strong>IR Blaster</strong>
+    <span class="muted" id="fw-version"></span>
+  </div>
+  <div class="pills" id="status-pills"></div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-tab="remotes">Remotes</button>
+  <button class="tab" data-tab="learn">Learn</button>
+  <button class="tab" data-tab="schedules">Schedules</button>
+  <button class="tab" data-tab="settings">Settings</button>
+  <button class="tab" data-tab="system">System</button>
+</nav>
+
+<main>
+
+<!-- ===================== REMOTES ===================== -->
+<section id="tab-remotes" class="panel active">
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Search commands…" autocomplete="off">
+    <div class="chips" id="group-chips"></div>
+  </div>
+  <div id="command-list"></div>
+  <p class="empty" id="commands-empty" hidden>
+    No commands stored yet. Open the <b>Learn</b> tab to teach the device its
+    first button.
+  </p>
+</section>
+
+<!-- ====================== LEARN ====================== -->
+<section id="tab-learn" class="panel">
+  <div class="card">
+    <h2>Teach a new command</h2>
+    <p class="muted">
+      Press <b>Start listening</b>, then point your remote at the receiver from
+      10–30&nbsp;cm and press the button once. Air-conditioner remotes send a
+      long burst — that is normal and fully supported.
+    </p>
+
+    <div class="learn-state" id="learn-state">
+      <div class="learn-big" id="learn-headline">Ready</div>
+      <div class="muted" id="learn-detail">Nothing captured yet.</div>
+      <div class="bar" id="learn-bar" hidden><div id="learn-bar-fill"></div></div>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" id="btn-learn-start">Start listening</button>
+      <button class="btn" id="btn-learn-cancel" hidden>Cancel</button>
+      <button class="btn" id="btn-learn-append" hidden>Capture another part</button>
+      <button class="btn" id="btn-learn-test" hidden>Test send</button>
+    </div>
+
+    <div id="learn-save" hidden>
+      <hr>
+      <div class="grid2">
+        <label>Name
+          <input id="learn-name" maxlength="32" placeholder="AC_Power">
+        </label>
+        <label>Group
+          <input id="learn-group" list="group-options" maxlength="24"
+                 placeholder="Living Room AC">
+          <datalist id="group-options"></datalist>
+        </label>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="btn-learn-save">Save command</button>
+        <button class="btn danger-ghost" id="btn-learn-discard">Discard</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>IR monitor</h2>
+    <p class="muted">
+      Enables the receiver and reports whatever it decodes without storing it.
+      Useful for checking the sensor is wired correctly. Leave it off during
+      normal use — it keeps the receive interrupt running.
+    </p>
+    <div class="row">
+      <label class="switch"><input type="checkbox" id="monitor-toggle"><span></span>
+        Monitor incoming signals</label>
+    </div>
+    <pre class="mono" id="monitor-out">—</pre>
+  </div>
+</section>
+
+<!-- ==================== SCHEDULES ==================== -->
+<section id="tab-schedules" class="panel">
+  <div class="card">
+    <h2>Add a schedule</h2>
+    <div class="grid2">
+      <label>Command
+        <select id="sch-cmd"></select>
+      </label>
+      <label>Label (optional)
+        <input id="sch-label" maxlength="32" placeholder="Bedtime AC off">
+      </label>
+      <label>Time
+        <input type="time" id="sch-time" value="23:00">
+      </label>
+      <label>Repeats (0 = command default)
+        <input type="number" id="sch-repeats" min="0" max="20" value="0">
+      </label>
+    </div>
+    <div class="dows" id="sch-dows"></div>
+    <div class="row">
+      <button class="btn primary" id="btn-sch-add">Add schedule</button>
+      <span class="muted" id="sch-clock"></span>
+    </div>
+    <p class="note" id="sch-time-warning" hidden>
+      The clock is not set yet. Schedules stay idle until NTP succeeds — check
+      the time zone and NTP servers on the Settings tab.
+    </p>
+  </div>
+  <div id="schedule-list"></div>
+</section>
+
+<!-- ==================== SETTINGS ===================== -->
+<section id="tab-settings" class="panel">
+  <div class="card">
+    <h2>WiFi</h2>
+    <div class="grid2">
+      <label>Network (SSID)
+        <input id="set-wifiSsid" list="ssid-options" maxlength="32">
+        <datalist id="ssid-options"></datalist>
+      </label>
+      <label>Password <span class="muted" id="wifi-pass-hint"></span>
+        <input id="set-wifiPass" type="password" maxlength="64"
+               placeholder="leave blank to keep current">
+      </label>
+      <label>Hostname
+        <input id="set-hostname" maxlength="32">
+      </label>
+      <label>Setup-AP password <span class="muted">(min 8 chars)</span>
+        <input id="set-apPass" type="password" maxlength="64"
+               placeholder="leave blank to keep current">
+      </label>
+    </div>
+    <div class="row">
+      <button class="btn" id="btn-wifi-scan">Scan networks</button>
+      <span class="muted" id="scan-status"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>MQTT &amp; Home Assistant</h2>
+    <label class="switch"><input type="checkbox" id="set-mqttEnabled"><span></span>
+      Enable MQTT</label>
+    <div class="grid2">
+      <label>Broker host<input id="set-mqttHost" maxlength="64"></label>
+      <label>Port<input type="number" id="set-mqttPort" min="1" max="65535"></label>
+      <label>Username<input id="set-mqttUser" maxlength="32"></label>
+      <label>Password
+        <input id="set-mqttPass" type="password" maxlength="64"
+               placeholder="leave blank to keep current">
+      </label>
+      <label>Base topic<input id="set-mqttBase" maxlength="32"></label>
+      <label>Discovery prefix<input id="set-haPrefix" maxlength="24"></label>
+    </div>
+    <label class="switch"><input type="checkbox" id="set-haDiscovery"><span></span>
+      Publish Home Assistant discovery</label>
+    <div class="row">
+      <button class="btn" id="btn-mqtt-rediscover">Republish discovery</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Time</h2>
+    <div class="grid2">
+      <label>POSIX time zone
+        <input id="set-tz" maxlength="47" placeholder="PKT-5">
+      </label>
+      <label>NTP server 1<input id="set-ntp1" maxlength="48"></label>
+      <label>NTP server 2<input id="set-ntp2" maxlength="48"></label>
+    </div>
+    <p class="note">
+      Examples: <code>PKT-5</code> (Pakistan), <code>IST-5:30</code> (India),
+      <code>CET-1CEST,M3.5.0,M10.5.0/3</code> (Central&nbsp;Europe),
+      <code>EST5EDT,M3.2.0,M11.1.0</code> (US&nbsp;Eastern),
+      <code>UTC0</code>.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>IR defaults</h2>
+    <div class="grid2">
+      <label>Repeats per send<input type="number" id="set-defaultRepeats" min="1" max="20"></label>
+      <label>Carrier (kHz)<input type="number" id="set-defaultFreqKhz" min="30" max="60"></label>
+      <label>Gap between repeats (ms)<input type="number" id="set-repeatGapMs" min="0" max="2000"></label>
+      <label>Gap between parts (ms)<input type="number" id="set-frameGapMs" min="0" max="2000"></label>
+      <label>Learn timeout (ms)<input type="number" id="set-learnTimeoutMs" min="3000" max="120000" step="1000"></label>
+      <label>Mark-excess correction (µs)<input type="number" id="set-markExcessUs" min="-200" max="200"></label>
+    </div>
+    <p class="note">
+      Leave mark-excess at <b>0</b> unless a specific appliance ignores a
+      replayed signal. Receivers report marks slightly long and spaces slightly
+      short; setting 50–100&nbsp;µs here removes that bias at send time.
+    </p>
+    <label class="switch"><input type="checkbox" id="set-ledEnabled"><span></span>
+      Status LEDs enabled</label>
+  </div>
+
+  <div class="card">
+    <h2>Security</h2>
+    <label class="switch"><input type="checkbox" id="set-authEnabled"><span></span>
+      Require a username and password</label>
+    <div class="grid2">
+      <label>Username<input id="set-authUser" maxlength="16"></label>
+      <label>Password
+        <input id="set-authPass" type="password" maxlength="32"
+               placeholder="leave blank to keep current">
+      </label>
+    </div>
+    <p class="note">
+      Basic authentication is sent in the clear over plain HTTP. It keeps
+      casual users on your LAN out; it is not a substitute for keeping this
+      device off the public internet.
+    </p>
+  </div>
+
+  <div class="sticky-save">
+    <button class="btn primary" id="btn-save-settings">Save settings</button>
+    <span class="muted" id="settings-hint"></span>
+  </div>
+</section>
+
+<!-- ===================== SYSTEM ====================== -->
+<section id="tab-system" class="panel">
+  <div class="card">
+    <h2>Device</h2>
+    <div class="kv" id="sys-kv"></div>
+  </div>
+
+  <div class="card">
+    <h2>Backup</h2>
+    <p class="muted">
+      The backup contains every learned command with its full timing data, as
+      plain JSON. Import posts one command at a time, so a large archive
+      restores without ever exhausting the device's memory.
+    </p>
+    <div class="row">
+      <button class="btn" id="btn-export">Download backup</button>
+      <label class="btn file">Restore backup<input type="file" id="import-file" accept=".json"></label>
+    </div>
+    <div class="bar" id="import-bar" hidden><div id="import-bar-fill"></div></div>
+    <pre class="mono" id="import-log" hidden></pre>
+  </div>
+
+  <div class="card">
+    <h2>Firmware update</h2>
+    <div class="grid2">
+      <label>Firmware image (<code>firmware.bin</code>)
+        <input type="file" id="ota-fw" accept=".bin">
+      </label>
+      <label>Filesystem image (<code>littlefs.bin</code>)
+        <input type="file" id="ota-fs" accept=".bin">
+      </label>
+    </div>
+    <div class="bar" id="ota-bar" hidden><div id="ota-bar-fill"></div></div>
+    <p class="note">
+      Do not power the device off during an update. If a firmware image fails
+      to boot, the ESP32 rolls back to the previous slot automatically.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Log</h2>
+    <pre class="mono log" id="log-out">—</pre>
+    <div class="row"><button class="btn" id="btn-log-refresh">Refresh</button></div>
+  </div>
+
+  <div class="card danger">
+    <h2>Maintenance</h2>
+    <div class="row">
+      <button class="btn" id="btn-portal">Toggle setup portal</button>
+      <button class="btn" id="btn-reboot">Reboot</button>
+      <button class="btn danger" id="btn-factory">Factory reset</button>
+    </div>
+    <p class="note">
+      Factory reset erases every learned command, all schedules and the WiFi
+      credentials. The same thing happens if you hold the device button for
+      5–10&nbsp;seconds and release.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<!-- modal + toasts -->
+<div class="overlay" id="overlay" hidden>
+  <div class="modal" id="modal"></div>
+</div>
+<div class="toasts" id="toasts"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

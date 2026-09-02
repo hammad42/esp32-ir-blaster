@@ -1,0 +1,56 @@
+name: Device compatibility report
+description: Tell us a remote works (or does not) — the most useful report there is
+labels: [compatibility]
+title: "[device] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Protocol behaviour is the one thing CI cannot test. Reports of remotes
+        that **work** are just as valuable as ones that fail — they build the
+        compatibility picture.
+
+  - type: input
+    id: appliance
+    attributes:
+      label: Appliance make and model
+      placeholder: "Gree GS-12LM / Samsung UE43TU7100"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Type
+      options: [Air conditioner, TV, Amplifier / soundbar, Fan, Projector, Set-top box, Other]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Works — captured and replays reliably
+        - Works, but only with settings changed (say which below)
+        - Captures, but the appliance ignores the replay
+        - Does not capture at all
+    validations:
+      required: true
+
+  - type: input
+    id: capture
+    attributes:
+      label: What the Learn tab reported
+      placeholder: "UNKNOWN, 0 bits, 583 timings, 2 parts"
+    validations:
+      required: true
+
+  - type: textarea
+    id: settings
+    attributes:
+      label: Settings needed
+      description: >
+        Force-raw, repeat count, carrier frequency, mark-excess — whatever you
+        had to change from the defaults, if anything.
+      placeholder: "Defaults worked. / Needed force-raw + repeats 2."

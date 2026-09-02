@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # PlatformIO libraries are pinned deliberately and need hardware re-testing
+  # before a bump, so they are not automated. See CONTRIBUTING.md.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
+    labels: [dependencies, ci]

@@ -1,0 +1,85 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, please check the troubleshooting section in
+        [docs/USAGE.md](https://github.com/hammad42/esp32-ir-blaster/blob/main/docs/USAGE.md#if-something-does-not-work)
+        — it covers most "it learns but the appliance ignores it" cases.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Firmware version
+      description: Shown in the web UI header, or in the serial boot banner.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: board
+    attributes:
+      label: Board
+      options:
+        - ESP32 DevKit v1 / WROOM-32
+        - ESP32-S3
+        - ESP32-C3
+        - Other (say which below)
+    validations:
+      required: true
+
+  - type: input
+    id: receiver
+    attributes:
+      label: IR receiver and how it is powered
+      description: >
+        Module type and whether its VCC is on 3V3 or 5V. A 5 V receiver
+        driving a 3.3 V GPIO is the most common cause of capture problems.
+      placeholder: "VS1838B 3-pin module, powered from 3V3"
+
+  - type: input
+    id: transmitter
+    attributes:
+      label: IR transmitter wiring
+      placeholder: "IR LED + 2N2222 + 33 ohm from 5V, or: KY-005 straight from GPIO"
+
+  - type: textarea
+    id: serial
+    attributes:
+      label: Serial log
+      description: >
+        Output from `pio device monitor` around the failure. The boot banner
+        and reset reason are especially useful. This is automatically
+        formatted as code.
+      render: text
+
+  - type: textarea
+    id: capture
+    attributes:
+      label: What the Learn tab reported
+      description: >
+        Protocol, bit count, timing count and number of parts, if the issue
+        involves a specific remote.
+      placeholder: "UNKNOWN, 0 bits, 583 timings, 2 parts"
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Things already tried
+      description: Tick any that apply — it saves a round trip.
+      options:
+        - label: Confirmed the IR LED flashes (seen through a phone camera)
+        - label: Tried "always replay raw timings" for this command
+        - label: Tried raising repeats to 3
+        - label: Tried a different carrier frequency (36 / 40 kHz)
+        - label: Re-learned the command from ~10 cm

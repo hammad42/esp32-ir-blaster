@@ -1,0 +1,19 @@
+# Normalise to LF in the repository. Without this, a Windows checkout can
+# commit CRLF into tools/make-demo.sh, and a shell script with CR line endings
+# fails on the Linux CI runner in ways that are annoying to diagnose.
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.py   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# Firmware images and archives must never be line-ending mangled.
+*.bin binary
+*.elf binary
+*.png binary
+*.jpg binary
+
+# Keep generated/vendored paths out of language statistics and diffs.
+docs/**    linguist-documentation
+tools/**   linguist-tooling

@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push supersedes an in-flight run on the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  firmware:
+    name: Build ${{ matrix.env }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [esp32dev, esp32dev_oled, esp32s3, esp32c3]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The toolchain is ~500 MB and identical between runs; caching it takes
+      # the job from ~5 minutes to well under two.
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/.cache
+            ~/.platformio/packages
+            ~/.platformio/platforms
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-${{ runner.os }}-
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Build firmware
+        run: pio run -e ${{ matrix.env }}
+
+      - name: Build filesystem image
+        run: pio run -e ${{ matrix.env }} -t buildfs
+
+      - name: Report sizes
+        run: |
+          echo "### ${{ matrix.env }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          pio run -e ${{ matrix.env }} 2>&1 | grep -E "^(RAM|Flash):" \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload images
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.env }}
+          path: |
+            .pio/build/${{ matrix.env }}/firmware.bin
+            .pio/build/${{ matrix.env }}/littlefs.bin
+            .pio/build/${{ matrix.env }}/partitions.bin
+          if-no-files-found: error
+          retention-days: 30
+
+  web:
+    name: Web UI checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The web UI has no build step by design, so the only thing to verify is
+      # that what ships actually parses.
+      - name: Check app.js parses
+        run: node --check data/app.js
+
+      - name: Check HTML references only files that exist
+        run: |
+          status=0
+          for f in $(grep -oE '(href|src)="/[^"]+"' data/index.html \
+                     | sed -E 's/.*"\/(.*)"/\1/'); do
+            if [ ! -f "data/$f" ]; then
+              echo "::error file=data/index.html::references missing data/$f"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Warn if the filesystem payload is getting large
+        run: |
+          bytes=$(du -sb data | cut -f1)
+          echo "data/ is $bytes bytes"
+          # The 4 MB partition table gives LittleFS 896 KB, shared with the
+          # learned IR codes. Anything approaching 256 KB deserves a look.
+          if [ "$bytes" -gt 262144 ]; then
+            echo "::warning::data/ exceeds 256 KB; check the LittleFS budget"
+          fi

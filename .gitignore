@@ -1,0 +1,30 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+.clang_complete
+.gcc-flags.json
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Build output
+*.bin
+*.elf
+*.map
+!docs/**/*.bin
+
+# Local secrets — never commit WiFi or MQTT credentials.
+# Use the web UI or an untracked local override instead.
+platformio_local.ini
+secrets.h
+*.local.ini
+
+# Generated demo build
+build/

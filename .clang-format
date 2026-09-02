@@ -1,0 +1,13 @@
+# Matches the style the firmware is written in: Google style at 80 columns,
+# which is also what IRremoteESP8266 and the Arduino core use.
+BasedOnStyle: Google
+Language: Cpp
+ColumnLimit: 80
+IndentWidth: 2
+AccessModifierOffset: -1
+DerivePointerAlignment: false
+PointerAlignment: Left
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: WithoutElse
+SortIncludes: CaseInsensitive
+IncludeBlocks: Preserve

@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest an addition or a change
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please read the **Scope** section of
+        [CONTRIBUTING.md](https://github.com/hammad42/esp32-ir-blaster/blob/main/CONTRIBUTING.md#scope)
+        first — it says what this project is deliberately not going to grow into.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation, not the solution you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: >
+        Existing REST or MQTT endpoints, a Home Assistant automation, a
+        schedule — and why they did not fit.
