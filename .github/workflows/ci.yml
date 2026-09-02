@@ -21,7 +21,7 @@ jobs:
         env: [esp32dev, esp32dev_oled, esp32s3, esp32c3]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
@@ -30,7 +30,7 @@ jobs:
       # The toolchain is ~500 MB and identical between runs; caching it takes
       # the job from ~5 minutes to well under two.
       - name: Cache PlatformIO
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.platformio/.cache
@@ -57,7 +57,7 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload images
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.env }}
           path: |
@@ -71,11 +71,11 @@ jobs:
     name: Web UI checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       # The web UI has no build step by design, so the only thing to verify is
       # that what ships actually parses.
