@@ -21,7 +21,7 @@ jobs:
         env: [esp32dev, esp32dev_oled, esp32s3, esp32c3]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
@@ -71,7 +71,7 @@ jobs:
     name: Web UI checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
