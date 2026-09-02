@@ -30,7 +30,7 @@ jobs:
       # The toolchain is ~500 MB and identical between runs; caching it takes
       # the job from ~5 minutes to well under two.
       - name: Cache PlatformIO
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.platformio/.cache
