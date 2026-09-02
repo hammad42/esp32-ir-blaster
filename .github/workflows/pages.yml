@@ -35,7 +35,7 @@ jobs:
 
       # enablement:true turns Pages on if it is not already, so a fork gets a
       # working demo without anyone having to visit the settings page first.
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         with:
           enablement: true
 
