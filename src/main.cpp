@@ -18,6 +18,7 @@
  */
 #include <Arduino.h>
 #include <LittleFS.h>
+#include <esp_log.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 
@@ -102,6 +103,14 @@ static const char* resetReasonName(esp_reset_reason_t r) {
 void setup() {
   Serial.begin(115200);
   delay(300);   // give the USB CDC on S3/C3 a moment to enumerate
+
+  // Arduino's LittleFS.exists() is implemented by trying to open the file, and
+  // the VFS layer beneath logs "does not exist, no permits for creation" at
+  // ERROR level when it is absent. On a first boot -- no /ir directory, no
+  // schedules file -- that prints two alarming errors for what is the normal
+  // empty state, which we detect and report properly one line later. Silence
+  // that one logger so an [E] in the log always means something real.
+  esp_log_level_set("vfs_api", ESP_LOG_NONE);
 
   Serial.println();
   LOGI("=== ESP32 Universal IR Blaster %s ===", FW_VERSION);

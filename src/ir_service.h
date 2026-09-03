@@ -28,6 +28,28 @@
 
 #include "config.h"
 
+/// Outcome of the loopback self-test. Every field is reported to the UI so a
+/// failure says *which half* is broken rather than just "it did not work".
+struct SelfTestResult {
+  bool     rxIdleOk = false;   //!< receiver line sat idle-high before the test
+  bool     received = false;   //!< anything at all came back
+  bool     matched = false;    //!< value and bit count round-tripped exactly
+  bool     exactProtocol = false;  //!< ...and the decoder used the same name
+  uint16_t idleLowSamples = 0; //!< how many of the idle samples read low
+  int16_t  protocol = -1;      //!< what came back
+  uint64_t value = 0;
+  uint16_t bits = 0;
+  uint16_t rawLen = 0;
+  uint8_t  attempts = 0;
+  const char* verdict = "";    //!< human-readable diagnosis
+
+  // What we asked for, echoed back so the caller can show expected vs actual
+  // without having to remember what it sent.
+  int16_t  expectedProtocol = -1;
+  uint64_t expectedValue = 0;
+  uint16_t expectedBits = 0;
+};
+
 enum class LearnState : uint8_t {
   Idle,       //!< not learning
   Waiting,    //!< armed, waiting for a signal
@@ -80,6 +102,21 @@ class IrService {
   bool sendRawArray(const uint16_t* raw, uint16_t len, uint16_t freqKhz,
                     uint8_t repeats, String& err);
 
+  /**
+   * Loopback self-test: transmits a known frame with the receiver left ON,
+   * and checks the same frame comes back. Requires the IR LED to be pointing
+   * at (or bouncing into) the receiver.
+   *
+   * This is the one operation that deliberately breaks the "never listen while
+   * transmitting" rule, because hearing ourselves is the entire point.
+   */
+  bool selfTest(SelfTestResult& out);
+
+  /// Same, but transmitting a protocol/value/bit-count you choose, so you can
+  /// bounce an arbitrary code off your own receiver and see what comes back.
+  bool selfTest(SelfTestResult& out, decode_type_t proto, uint64_t value,
+                uint16_t bits);
+
   bool busy() const { return txBusy_; }
   const String& lastSentName() const { return lastSentName_; }
   uint32_t lastSentAt() const { return lastSentAt_; }
@@ -96,6 +133,8 @@ class IrService {
   IRrecv* recv_ = nullptr;   //!< heap-allocated: its buffers are sized by ctor
   IRsend* send_ = nullptr;
   decode_results results_;
+  uint8_t rxPin_ = 0;
+  uint8_t txPin_ = 0;
 
   bool rxEnabled_ = false;
   bool monitor_ = false;

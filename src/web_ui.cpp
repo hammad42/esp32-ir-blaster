@@ -117,29 +117,56 @@ bool WebUi::readJsonBody(JsonDocument& doc) {
 // Static files & captive portal
 // ---------------------------------------------------------------------------
 
+/**
+ * Serves a file from LittleFS with conditional-request support.
+ *
+ * Caching policy: `no-cache` means "you may store this, but ask me every time
+ * before reusing it" -- it is NOT the same as `no-store`. Paired with an ETag,
+ * the browser sends If-None-Match on every load and we answer 304 with an
+ * empty body when nothing changed, so repeat visits stay fast.
+ *
+ * The previous `max-age=86400` was a genuine bug on a device built around
+ * over-the-air updates: after a filesystem update the browser kept serving the
+ * old UI from cache for a day, with no way for the user to know why. Worse,
+ * index.html and app.js expire independently, so you could end up running new
+ * markup against old scripts -- which is exactly how a button ends up visible
+ * but dead.
+ */
 bool WebUi::serveFromFs(const String& path) {
   // Prefer a pre-compressed copy when one exists.
-  const String gz = path + ".gz";
-  if (LittleFS.exists(gz)) {
-    File f = LittleFS.open(gz, "r");
-    if (f) {
-      server_.sendHeader("Content-Encoding", "gzip");
-      server_.sendHeader("Cache-Control", "max-age=86400");
-      server_.streamFile(f, contentTypeFor(path));
-      f.close();
-      return true;
-    }
+  String actual = path;
+  bool gzipped = false;
+  if (anyGzipped_ && LittleFS.exists(path + ".gz")) {
+    actual = path + ".gz";
+    gzipped = true;
+  } else if (!LittleFS.exists(path)) {
+    return false;
   }
-  if (LittleFS.exists(path)) {
-    File f = LittleFS.open(path, "r");
-    if (f) {
-      server_.sendHeader("Cache-Control", "max-age=86400");
-      server_.streamFile(f, contentTypeFor(path));
-      f.close();
-      return true;
-    }
+
+  File f = LittleFS.open(actual, "r");
+  if (!f) return false;
+
+  // Size and mtime both change on essentially any edit; the firmware version
+  // is folded in so a firmware update also invalidates, belt and braces.
+  char etag[48];
+  snprintf(etag, sizeof(etag), "\"%x-%x-" FW_VERSION "\"", (unsigned)f.size(),
+           (unsigned)f.getLastWrite());
+
+  if (server_.hasHeader("If-None-Match") &&
+      server_.header("If-None-Match") == etag) {
+    f.close();
+    server_.sendHeader("ETag", etag);
+    server_.sendHeader("Cache-Control", "no-cache");
+    server_.send(304, "text/plain", "");
+    return true;
   }
-  return false;
+
+  server_.sendHeader("ETag", etag);
+  server_.sendHeader("Cache-Control", "no-cache");
+  if (gzipped) server_.sendHeader("Content-Encoding", "gzip");
+  server_.streamFile(f, contentTypeFor(path));
+  f.close();
+  return true;
 }
 
 /// In AP mode, a request for any host but ours is a captive-portal probe.
@@ -440,4 +467,74 @@ void WebUi::apiMonitor() {
   if (!readJsonBody(doc)) return;
   irService.setMonitor(doc["on"] | false);
   sendOk();
+}
+
+// Blocks for up to ~1.5 s (three attempts, each waiting out the receive
+// timeout). That is well inside the watchdog period, and selfTest() feeds the
+// watchdog while it waits.
+void WebUi::apiSelfTest() {
+  if (!guard()) return;
+
+  // All three are optional; with no body at all this is the plain NEC loopback.
+  decode_type_t proto = decode_type_t::NEC;
+  uint64_t value = SELFTEST_VALUE;
+  uint16_t bits = SELFTEST_BITS;
+
+  if (server_.hasArg("plain") && server_.arg("plain").length() > 1) {
+    JsonDocument doc;
+    if (deserializeJson(doc, server_.arg("plain"))) {
+      sendError(400, "malformed JSON body");
+      return;
+    }
+    const char* p = doc["protocol"].as<const char*>();
+    if (p && *p) {
+      proto = strToDecodeType(p);
+      if (proto == decode_type_t::UNKNOWN) {
+        sendError(400, "unknown protocol name");
+        return;
+      }
+    }
+    const char* v = doc["value"].as<const char*>();
+    if (v && *v) {
+      // Accept "0x20DF10EF" or bare hex; hex is how IR codes are always written.
+      value = strtoull((v[0] == '0' && (v[1] == 'x' || v[1] == 'X')) ? v + 2 : v,
+                       nullptr, 16);
+    } else if (!doc["value"].isNull()) {
+      value = doc["value"].as<uint64_t>();
+    }
+    if (!doc["bits"].isNull()) bits = doc["bits"].as<uint16_t>();
+  }
+
+  SelfTestResult r;
+  const bool pass = irService.selfTest(r, proto, value, bits);
+
+  JsonDocument doc;
+  doc["ok"] = true;              // the request succeeded; "pass" is the result
+  doc["pass"] = pass;
+  doc["rxIdleOk"] = r.rxIdleOk;
+  doc["idleLowSamples"] = r.idleLowSamples;
+  doc["idleSamples"] = SELFTEST_IDLE_SAMPLES;
+  doc["received"] = r.received;
+  doc["matched"] = r.matched;
+  doc["exactProtocol"] = r.exactProtocol;
+  doc["attempts"] = r.attempts;
+  doc["verdict"] = r.verdict;
+  doc["expectedProtocol"] = typeToString(proto, false);
+  doc["expectedBits"] = r.expectedBits;
+  char hex[24];
+  snprintf(hex, sizeof(hex), "0x%llX", (unsigned long long)r.expectedValue);
+  doc["expectedValue"] = hex;
+  if (r.received) {
+    doc["protocol"] = (r.protocol < 0)
+                          ? String("UNKNOWN")
+                          : typeToString((decode_type_t)r.protocol, false);
+    doc["bits"] = r.bits;
+    doc["raw"] = r.rawLen;
+    snprintf(hex, sizeof(hex), "0x%llX", (unsigned long long)r.value);
+    doc["value"] = hex;
+  }
+
+  String out;
+  serializeJson(doc, out);
+  sendJson(200, out);
 }

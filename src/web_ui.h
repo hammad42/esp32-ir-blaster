@@ -63,6 +63,7 @@ class WebUi {
   void apiLearnSave();
   void apiLearnTest();
   void apiMonitor();
+  void apiSelfTest();
 
   // -- API: import / export --
   void apiExport();
@@ -83,6 +84,11 @@ class WebUi {
   // -- OTA --
   void otaFinish();
   void otaUpload(bool filesystem);
+
+  /// True only if the filesystem actually contains any pre-compressed asset.
+  /// Probing for a ".gz" that is not there costs an ERROR log line per
+  /// request, so the question is answered once at boot instead.
+  bool      anyGzipped_ = false;
 
   WebServer server_{80};
   bool      otaActive_ = false;

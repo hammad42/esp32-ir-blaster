@@ -114,6 +114,44 @@ that pointed at it.
 
 `state` is one of `idle`, `waiting`, `captured`, `timeout`, `error`.
 
+### `POST /api/selftest`
+
+Transmits a known NEC frame **with the receiver left on** and checks it comes
+back. Needs the IR LED pointing at the receiver, 10–30 cm apart, or both
+bounced off a wall. No remote and no appliance required.
+
+This is the one operation that deliberately breaks the "never listen while
+transmitting" rule, because hearing ourselves is the point.
+
+```bash
+curl -X POST http://ir-blaster.local/api/selftest
+```
+
+```json
+{
+  "ok": true, "pass": true,
+  "rxIdleOk": true, "idleLowSamples": 0, "idleSamples": 200,
+  "received": true, "matched": true, "attempts": 1,
+  "verdict": "transmitter and receiver are both working",
+  "expectedProtocol": "NEC", "expectedValue": "0x20DF10EF",
+  "protocol": "NEC", "value": "0x20DF10EF", "bits": 32, "raw": 67
+}
+```
+
+`ok` reports that the *request* succeeded; **`pass` is the test result** — a
+failed test still returns HTTP 200.
+
+The test runs in three stages so a failure says which half is broken:
+
+| Stage | What it checks | If it fails |
+|---|---|---|
+| `rxIdleOk` | the receiver's output sits idle-high before anything is sent | receiver has no power, or `OUT` is not reaching the pin — the transmitter is never even exercised |
+| `received` | any signal came back | receiver is alive but the LED is not emitting: transistor pinout, LED polarity, LED current |
+| `matched` | protocol, value and bit count all round-tripped | optics — too close and the sensor saturates, too far and it fades. 10–30 cm facing each other |
+
+It blocks for up to ~1.5 s (three attempts, each waiting out the 90 ms receive
+timeout) and feeds the watchdog while it waits.
+
 ### `POST /api/monitor`
 
 `{"on":true}` — enables the receiver and reports what it decodes in the

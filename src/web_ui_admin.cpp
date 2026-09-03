@@ -509,6 +509,28 @@ void WebUi::otaUpload(bool filesystem) {
 // ---------------------------------------------------------------------------
 
 void WebUi::begin() {
+  // WebServer discards request headers unless they are asked for by name.
+  // Without this, conditional requests never work and every asset is resent.
+  const char* wanted[] = {"If-None-Match"};
+  server_.collectHeaders(wanted, 1);
+
+  // Find out once whether any asset is pre-compressed, so serveFromFs() does
+  // not have to probe for a ".gz" -- and log an error -- on every request.
+  File root = LittleFS.open("/");
+  if (root) {
+    File f = root.openNextFile();
+    while (f) {
+      const String n(f.name());
+      f.close();
+      if (n.endsWith(".gz")) {
+        anyGzipped_ = true;
+        break;
+      }
+      f = root.openNextFile();
+    }
+    root.close();
+  }
+
   // Small lambdas keep the route table readable in one screen.
   server_.on("/", HTTP_GET, [this]() { handleRoot(); });
 
@@ -526,6 +548,11 @@ void WebUi::begin() {
   server_.on("/api/learn/save", HTTP_POST, [this]() { apiLearnSave(); });
   server_.on("/api/learn/test", HTTP_POST, [this]() { apiLearnTest(); });
   server_.on("/api/monitor", HTTP_POST, [this]() { apiMonitor(); });
+  // GET as well as POST: a browser address bar can only issue GET, and this is
+  // a diagnostic with no lasting side effects. It is the escape hatch when the
+  // web UI itself is the thing that is broken.
+  server_.on("/api/selftest", HTTP_POST, [this]() { apiSelfTest(); });
+  server_.on("/api/selftest", HTTP_GET, [this]() { apiSelfTest(); });
 
   server_.on("/api/export", HTTP_GET, [this]() { apiExport(); });
   server_.on("/api/import", HTTP_POST, [this]() { apiImport(); });

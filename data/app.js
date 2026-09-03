@@ -410,6 +410,68 @@ $('#btn-learn-save').onclick = async () => {
   } catch (e) { toast(e.message, 'bad'); }
 };
 
+/* --------------------------------------------------------------- self-test */
+
+// Bound defensively. A stale cached page can pair new markup with old script
+// or the reverse; a missing element must not throw here, because a top-level
+// exception would take every handler defined *after* it down as well.
+function onClick(sel, fn) {
+  const el = $(sel);
+  if (el) el.onclick = fn;
+  else console.warn('missing element ' + sel + ' - stale cached page?');
+}
+
+onClick('#btn-selftest', async () => {
+  const btn = $('#btn-selftest');
+  btn.disabled = true;
+  $('#selftest-busy').hidden = false;
+  $('#selftest-result').hidden = true;
+  try {
+    // Only send the fields that were actually filled in; an empty body means
+    // "use the built-in NEC test".
+    const body = {};
+    const proto = ($('#st-protocol').value || '').trim();
+    const val = ($('#st-value').value || '').trim();
+    const bits = ($('#st-bits').value || '').trim();
+    if (proto) body.protocol = proto.toUpperCase();
+    if (val) body.value = val;
+    if (bits) body.bits = +bits;
+
+    // The device blocks for up to ~1.5 s running this, so the button stays
+    // disabled rather than letting a second request stack up behind it.
+    const r = await post('/api/selftest', body);
+    const head = $('#selftest-headline');
+    head.className = 'learn-big ' + (r.pass ? 'ok' : 'bad');
+    head.textContent = r.pass ? 'PASS' : 'FAIL';
+    $('#selftest-verdict').textContent = r.verdict;
+
+    const rows = [
+      ['Receiver idle line', r.rxIdleOk
+        ? `OK (${r.idleLowSamples}/${r.idleSamples} low)`
+        : `not idle (${r.idleLowSamples}/${r.idleSamples} low)`],
+      ['Signal returned', r.received ? 'yes' : 'no'],
+      ['Attempts', String(r.attempts)],
+      ['Expected', `${r.expectedProtocol} ${r.expectedValue}` +
+        (r.expectedBits ? ` · ${r.expectedBits} bits` : '')]
+    ];
+    if (r.received) {
+      rows.push(['Received', `${r.protocol} ${r.value || ''} · ${r.bits} bits`]);
+      rows.push(['Raw timings', String(r.raw)]);
+    }
+    $('#selftest-kv').innerHTML = rows
+      .map(([k, v]) => `<div><span>${esc(k)}</span><span>${esc(v)}</span></div>`)
+      .join('');
+
+    $('#selftest-result').hidden = false;
+    toast(r.pass ? 'Self-test passed' : 'Self-test failed', r.pass ? 'ok' : 'bad');
+  } catch (e) {
+    toast(e.message, 'bad');
+  } finally {
+    btn.disabled = false;
+    $('#selftest-busy').hidden = true;
+  }
+});
+
 $('#monitor-toggle').addEventListener('change', async (e) => {
   try {
     await post('/api/monitor', { on: e.target.checked });

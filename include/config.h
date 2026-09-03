@@ -46,6 +46,24 @@
 #define IR_GROUP_MAX        25      //!< incl. NUL
 #define IR_ID_LEN            9      //!< 8 hex chars + NUL
 
+// --------------------------------------------------------------------------
+// Loopback self-test
+// --------------------------------------------------------------------------
+/// A structurally valid NEC frame: both byte pairs are true complements
+/// (0x20/0xDF and 0x10/0xEF), so a strict decoder accepts it and any
+/// corruption in flight shows up as a decode failure rather than a silent
+/// wrong answer.
+#define SELFTEST_VALUE     0x20DF10EFULL
+#define SELFTEST_BITS      32
+#define SELFTEST_ATTEMPTS  3
+/// The capture only completes after IR_RECV_TIMEOUT_MS of silence following a
+/// ~68 ms NEC frame, so allow generous headroom before calling it a miss.
+#define SELFTEST_WAIT_MS   400
+/// Idle-line probe: a demodulator with power sits HIGH. More lows than this
+/// (out of SELFTEST_IDLE_SAMPLES) means the line is stuck or drowning in noise.
+#define SELFTEST_IDLE_SAMPLES 200
+#define SELFTEST_IDLE_MAX_LOW  20
+
 #define DEFAULT_LEARN_TIMEOUT_MS 20000
 #define DEFAULT_REPEATS           1
 #define DEFAULT_REPEAT_GAP_MS    40 //!< silence between repeats of one command

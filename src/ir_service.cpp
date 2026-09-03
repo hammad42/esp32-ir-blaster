@@ -28,6 +28,8 @@ bool IrService::begin(uint8_t rxPin, uint8_t txPin) {
   recv_->setUnknownThreshold(IR_MIN_RAWLEN);
   send_->begin();
 
+  rxPin_ = rxPin;
+  txPin_ = txPin;
   pinMode(txPin, OUTPUT);
   digitalWrite(txPin, LOW);
 
@@ -160,6 +162,8 @@ void IrService::loop() {
   if (!rxEnabled_ || txBusy_) return;
 
   if (recv_->decode(&results_)) {
+    bool stillListening = true;
+
     if (monitor_ && learnState_ != LearnState::Waiting) {
       // Diagnostics: report what we saw without storing it.
       lastSeen_ = typeToString(results_.decode_type, false) + " / " +
@@ -168,11 +172,18 @@ void IrService::loop() {
       rxCount_++;
       indicators.pulseActivity();
     } else if (learnState_ == LearnState::Waiting) {
-      if (consumeDecode()) {
-        if (!monitor_) setReceiverEnabled(false);
+      if (consumeDecode() && !monitor_) {
+        setReceiverEnabled(false);
+        stillListening = false;
       }
     }
-    recv_->resume();
+
+    // resume() must never be called on a stopped receiver. On the ESP32,
+    // disableIRIn() ends the hardware timer and sets the handle to NULL, while
+    // resume() dereferences that same handle -- so resuming after disabling is
+    // a null dereference that panics and reboots the device. Which is exactly
+    // what happened the first time a capture actually succeeded.
+    if (stillListening) recv_->resume();
   }
 
   if (learnState_ == LearnState::Waiting &&
@@ -325,6 +336,160 @@ bool IrService::sendStored(const char* id, int repeatsOverride, String& err) {
     LOGE("tx: '%s' failed: %s", m->name, err.c_str());
   }
   return ok;
+}
+
+// ---------------------------------------------------------------------------
+// Loopback self-test
+// ---------------------------------------------------------------------------
+
+bool IrService::selfTest(SelfTestResult& out) {
+  return selfTest(out, decode_type_t::NEC, SELFTEST_VALUE, SELFTEST_BITS);
+}
+
+bool IrService::selfTest(SelfTestResult& out, decode_type_t proto,
+                         uint64_t value, uint16_t bits) {
+  out = SelfTestResult();
+  out.expectedProtocol = (int16_t)proto;
+  out.expectedValue = value;
+  out.expectedBits = bits;
+
+  // State-based air-conditioner protocols carry a whole byte array, not a
+  // 64-bit value, so there is nothing sensible to send from a hex code. Say so
+  // rather than transmitting something meaningless and calling it a failure.
+  if (proto <= decode_type_t::UNKNOWN || hasACState(proto)) {
+    out.verdict =
+        "that protocol cannot be sent from a plain hex value -- pick a simple "
+        "one (NEC, SAMSUNG, SONY, RC5, RC6, PANASONIC, JVC) or learn the "
+        "command from its remote instead";
+    return false;
+  }
+
+  if (txBusy_) {
+    out.verdict = "transmitter busy, try again in a moment";
+    return false;
+  }
+  if (learnState_ == LearnState::Waiting) {
+    out.verdict = "learn mode is armed -- cancel it before running the self-test";
+    return false;
+  }
+
+  const bool wasRx = rxEnabled_;
+  const bool wasMonitor = monitor_;
+  monitor_ = false;
+
+  // ---- Stage 1: is the receiver even alive? -------------------------------
+  // A powered demodulator holds its output high and only pulls low on a
+  // carrier burst. Sampling the bare pin first separates "receiver missing or
+  // miswired" from "transmitter not emitting" -- otherwise both failures look
+  // identical, which is the whole problem with a loopback test.
+  setReceiverEnabled(false);
+  pinMode(rxPin_, INPUT_PULLUP);
+  for (uint16_t i = 0; i < SELFTEST_IDLE_SAMPLES; i++) {
+    if (digitalRead(rxPin_) == LOW) out.idleLowSamples++;
+    delayMicroseconds(250);
+  }
+  out.rxIdleOk = (out.idleLowSamples <= SELFTEST_IDLE_MAX_LOW);
+
+  if (!out.rxIdleOk) {
+    out.verdict =
+        "receiver output is not idling high -- check its VCC (3V3), GND, and "
+        "that OUT reaches the receive pin";
+    LOGE("selftest: rx line not idle (%u/%u samples low)", out.idleLowSamples,
+         (unsigned)SELFTEST_IDLE_SAMPLES);
+    if (wasRx) setReceiverEnabled(true);
+    monitor_ = wasMonitor;
+    return false;
+  }
+
+  // ---- Stage 2: transmit while listening ----------------------------------
+  txBusy_ = true;
+  setReceiverEnabled(true);
+  indicators.pulseActivity(200);
+
+  bool got = false;
+  bool sendOk = true;
+  for (uint8_t attempt = 1; attempt <= SELFTEST_ATTEMPTS && !got; attempt++) {
+    out.attempts = attempt;
+    recv_->resume();
+
+    if (!send_->send(proto, value, bits)) {
+      sendOk = false;
+      break;
+    }
+
+    const uint32_t deadline = millis() + SELFTEST_WAIT_MS;
+    while ((int32_t)(millis() - deadline) < 0) {
+      if (recv_->decode(&results_)) {
+        got = true;
+        break;
+      }
+      delay(5);
+      feedWdt();
+    }
+  }
+
+  txBusy_ = false;
+
+  // ---- Stage 3: verdict ---------------------------------------------------
+  if (got) {
+    out.received = true;
+    out.protocol = (int16_t)results_.decode_type;
+    out.value = results_.value;
+    out.bits = results_.bits;
+    out.rawLen = getCorrectedRawLength(&results_);
+
+    // The hardware verdict rests on the payload, not on the decoder's choice of
+    // name. A NEC-timed frame whose bytes are not true complements comes back
+    // as NEC_LIKE, and a 13-bit RC5 frame as RC5X -- in both cases the bits
+    // round-tripped perfectly and the optics are fine. Judging on the protocol
+    // label would report a hardware fault that does not exist.
+    out.matched = (results_.value == value) && (results_.bits == bits);
+    out.exactProtocol = out.matched && (results_.decode_type == proto);
+    rxCount_++;
+  }
+
+  if (!sendOk) {
+    out.verdict =
+        "the library refused to transmit that protocol and bit count -- check "
+        "the bit count is the one this protocol expects";
+    setReceiverEnabled(wasRx || wasMonitor);
+    monitor_ = wasMonitor;
+    LOGE("selftest: send refused for %s/%u bits",
+         typeToString(proto, false).c_str(), bits);
+    return false;
+  }
+
+  if (out.matched && out.exactProtocol) {
+    out.verdict = "transmitter and receiver are both working";
+    LOGI("selftest: PASS on attempt %u", out.attempts);
+  } else if (out.matched) {
+    out.verdict =
+        "transmitter and receiver are both working -- the bits round-tripped "
+        "exactly, and the decoder simply named the result as a variant of the "
+        "protocol that was sent";
+    LOGI("selftest: PASS on attempt %u (decoded as %s)", out.attempts,
+         typeToString(results_.decode_type, false).c_str());
+  } else if (out.received) {
+    // Something arrived, so both halves have power -- this is an optics or
+    // signal-integrity problem, not a wiring one. Saturation from a LED
+    // pressed against the sensor is as common a cause as being too far away.
+    out.verdict =
+        "signal received but corrupted -- move the LED and sensor 10-30 cm "
+        "apart and face them at each other, or bounce off a wall";
+    LOGW("selftest: garbled (%s, %u bits)",
+         typeToString(results_.decode_type, false).c_str(), results_.bits);
+  } else {
+    out.verdict =
+        "receiver is alive but heard nothing -- the LED is probably not "
+        "emitting: check the transistor pinout, the LED polarity, and that it "
+        "flickers when seen through a phone camera";
+    LOGE("selftest: no signal returned after %u attempts", out.attempts);
+  }
+
+  setReceiverEnabled(wasRx || wasMonitor);
+  monitor_ = wasMonitor;
+  if (wasMonitor) recv_->resume();
+  return out.matched;
 }
 
 bool IrService::sendRawArray(const uint16_t* raw, uint16_t len, uint16_t freqKhz,

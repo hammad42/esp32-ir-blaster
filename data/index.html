@@ -85,6 +85,53 @@
   </div>
 
   <div class="card">
+    <h2>Hardware self-test</h2>
+    <p class="muted">
+      Sends a known signal and listens for it coming back. Point the IR LED at
+      the receiver — 10–30&nbsp;cm apart, facing each other — or bounce both off
+      a nearby wall. Checks the receiver, the transmitter and the wiring in one
+      go, with no remote and no appliance needed.
+    </p>
+    <div class="row">
+      <button class="btn primary" id="btn-selftest">Run self-test</button>
+      <span class="muted" id="selftest-busy" hidden>Testing…</span>
+    </div>
+
+    <details class="advanced">
+      <summary>Send a specific code instead</summary>
+      <p class="note">
+        Transmits whatever you enter and reports what the receiver got back.
+        Leave blank for the default NEC test. State-based air-conditioner
+        protocols cannot be sent from a hex value &mdash; learn those from the
+        remote instead.
+      </p>
+      <div class="grid2">
+        <label>Protocol
+          <input id="st-protocol" list="st-protocols" placeholder="NEC" maxlength="16">
+          <datalist id="st-protocols">
+            <option value="NEC"><option value="SAMSUNG"><option value="SONY">
+            <option value="RC5"><option value="RC6"><option value="PANASONIC">
+            <option value="JVC"><option value="LG"><option value="SHARP">
+          </datalist>
+        </label>
+        <label>Value (hex)
+          <input id="st-value" placeholder="0x20DF10EF" maxlength="18">
+        </label>
+        <label>Bits
+          <input type="number" id="st-bits" placeholder="32" min="1" max="64">
+        </label>
+      </div>
+    </details>
+    <div id="selftest-result" hidden>
+      <div class="learn-state">
+        <div class="learn-big" id="selftest-headline"></div>
+        <div class="muted" id="selftest-verdict"></div>
+      </div>
+      <div class="kv" id="selftest-kv"></div>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>IR monitor</h2>
     <p class="muted">
       Enables the receiver and reports whatever it decodes without storing it.

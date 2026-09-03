@@ -207,6 +207,16 @@
 
       case '/api/monitor': return { ok: true };
 
+      case '/api/selftest':
+        return {
+          ok: true, pass: true, rxIdleOk: true,
+          idleLowSamples: 0, idleSamples: 200,
+          received: true, matched: true, attempts: 1,
+          verdict: 'transmitter and receiver are both working',
+          expectedProtocol: 'NEC', expectedValue: '0x20DF10EF',
+          protocol: 'NEC', value: '0x20DF10EF', bits: 32, raw: 67
+        };
+
       case '/api/system/factory-reset':
       case '/api/system/reboot':
       case '/api/system/portal':

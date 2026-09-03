@@ -39,6 +39,33 @@ but bookmarks and MQTT integrations are happier.
 
 ---
 
+## Checking the hardware before you start
+
+**Learn tab → Hardware self-test → Run self-test.**
+
+The device transmits a known signal and listens for it coming back, so it
+verifies the receiver, the transmitter and the wiring in one go — with no
+remote and no appliance involved. Point the IR LED at the receiver, roughly
+10–30 cm apart and facing each other, or bounce both off a nearby wall.
+
+It tests in three stages, so a failure tells you *which half* is broken instead
+of just "it didn't work":
+
+| Result | Meaning |
+|---|---|
+| **PASS** | Both halves work. Go and learn a command. |
+| *"receiver output is not idling high"* | The transmitter was never even tried. The receiver has no power or its `OUT` wire is not reaching the pin. Check VCC is on **3V3** and GND is shared. |
+| *"receiver is alive but heard nothing"* | The receiver is fine, so the LED is not emitting. Check the transistor pinout (emitter to GND, collector to the LED), the LED polarity, and look at the LED through a phone camera while the test runs — you should see it flicker. |
+| *"signal received but corrupted"* | Both halves work; this is an optics problem. Too close saturates the sensor just as surely as too far fades it. Try 10–30 cm. |
+
+Worth running once when you first build the circuit, and again any time
+something stops working — it takes two seconds and rules out half the possible
+causes.
+
+> The self-test is the only time the device listens while transmitting. In
+> normal use the receiver is switched off during a send, so a blaster never
+> captures its own output.
+
 ## Learning a command
 
 1. Open the **Learn** tab.
