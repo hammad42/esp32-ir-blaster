@@ -11,6 +11,42 @@ matters when you are deciding whether to flash a device that is working today.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Out-of-bounds write when storing a capture.** The bound was computed over a
+  different range of the receive buffer than the write loop walked, so an
+  interval above 65535 us in the final slot could push the write past the end of
+  the capture buffer. The leading gap is normally the largest value present, and
+  its surplus had been masking the shortfall.
+- **LittleFS left unmounted after a failed filesystem OTA.** If `Update.begin()`
+  failed, nothing remounted the filesystem and the device ran without storage
+  until the next reboot. The remount now happens on every path that can end an
+  update, and no longer formats on failure -- silently reformatting a
+  half-written partition destroyed every learned command with no confirmation.
+- **Schedules deleted by a storage glitch.** Orphan cleanup ran at boot whether
+  or not the command store had mounted, and persisted the result, turning a
+  transient fault into permanent data loss. It is now gated on a successful
+  mount and refuses to prune when the store is empty but schedules exist.
+- **"Discard" did nothing to a finished capture.** It only acted while still
+  listening, so the capture and its UI survived -- and a following "capture
+  another part" appended to the signal that had just been rejected.
+- **Stored passwords could not be cleared.** Both the firmware and the browser
+  refused empty secrets, so joining an open WiFi network, using an anonymous
+  MQTT broker or reopening the setup AP were all impossible without a factory
+  reset. Each field now has an explicit *Clear it* option.
+- **WiFi scan showed only one network.** The SSID box used a `<datalist>`, which
+  filters against whatever is already typed in its input -- and that box is
+  pre-filled with the current network. Replaced with an explicit tap-to-pick
+  list showing signal strength and open networks.
+- `IrStore::begin()` no longer formats the filesystem silently when a mount
+  fails; it says what it is about to erase first.
+
+### Added
+
+- `tools/ir-backup.sh` -- save, list and restore learned commands over the REST
+  API from a terminal, so a backup can sit in a flashing script rather than
+  requiring a trip through the browser.
+
 ## [1.0.0] — 2026-09-03
 
 Initial release.
