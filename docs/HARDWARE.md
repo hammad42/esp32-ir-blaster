@@ -146,7 +146,21 @@ Flat face towards you, legs pointing down:
 | **S8050** | Emitter | Base | Collector |
 
 Getting this backwards is the single most common reason a home-built blaster
-does not transmit. Check yours against its datasheet.
+does not transmit. Check yours against its datasheet — and because clone parts
+are common and datasheets differ on whether the drawing is a top or bottom
+view, confirm it with a meter rather than trusting the marking:
+
+**Identifying an NPN in diode mode (30 seconds)**
+
+1. **Find the base.** It is the only pin that reads a forward drop
+   (~0.6–0.7 V) to *both* other pins with the **red probe resting on it**.
+   Red-on-base also confirms the part is NPN rather than PNP.
+2. **Separate emitter from collector.** Keep red on the base and measure to
+   each of the other two. The **higher** reading (~0.7 V) is the **emitter**;
+   the lower (~0.6 V) is the **collector**. The base-emitter junction is more
+   heavily doped, so it always reads slightly higher.
+
+Thirty seconds here saves an evening of "the firmware must be wrong".
 
 ### If you use a ready-made transmitter module
 
