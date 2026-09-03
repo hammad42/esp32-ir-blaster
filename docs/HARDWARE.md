@@ -63,6 +63,27 @@ otherwise identical-looking boards:
 - Bare **VS1838B** (domed face towards you, legs down): `OUT · GND · VCC`
 - Common 3-pin breakout: usually marked `S` (signal), `+` or `VCC`, `−` or `G`
 
+### The black "IR Receiver" 3-pin module
+
+The common black-PCB module silkscreened **`IR Receiver`**, with the sensor at
+one end and a 3-pin header at the other, is labelled per pin. Hold it with the
+**sensor on the left and the header on the right**; the labels then read, from
+the top edge down:
+
+| Pin | Label | Connect to |
+|---|---|---|
+| 1 (nearest top edge) | `OUT` | GPIO 14 |
+| 2 (middle) | `VCC` | **3V3** |
+| 3 (nearest bottom edge) | `GND` | GND |
+
+Trust the silkscreen over this table — it is printed next to the pins for
+exactly this reason, and these boards get re-laid-out between batches.
+
+This module already carries a few SMD parts, which on most versions include a
+supply decoupling capacitor. That covers part of what the filter below does,
+so try it plain first; add the 100 Ω + 10 µF only if you see phantom captures
+or learns that time out with the remote clearly working.
+
 ```
                  100 Ω
    3V3 ─────────/\/\/\──────┬────── VCC (receiver)
@@ -127,14 +148,55 @@ Flat face towards you, legs pointing down:
 Getting this backwards is the single most common reason a home-built blaster
 does not transmit. Check yours against its datasheet.
 
-### If you use the KY-005 transmitter module
+### If you use a ready-made transmitter module
 
-The KY-005 is an IR LED with a 330 Ω resistor, driven straight from a GPIO.
-It works — expect 1–2 m of range, enough to test with. For whole-room range,
-either take the LED off the module and build the driver above, or feed the
-module's signal pin from the transistor collector with the LED's own resistor
-in series (then use 10–22 Ω as your added resistor, since the 330 Ω is already
-in the path).
+**The 2-pin KY-005** is an IR LED with a 330 Ω resistor, driven straight from a
+GPIO. It works — expect 1–2 m of range, enough to test with. For whole-room
+range, take the LED off it and build the driver above.
+
+**The black 3-pin `IR Transmitter` module** (silkscreened `DAT · VCC · GND`,
+some marked `V1221`) is the more interesting case. Hold it with the **LED on
+the left and the header on the right**; the labels read, from the top edge down:
+
+| Pin | Label | Connect to |
+|---|---|---|
+| 1 (nearest top edge) | `DAT` | GPIO 4 |
+| 2 (middle) | `VCC` | 3V3 to start — see below |
+| 3 (nearest bottom edge) | `GND` | GND |
+
+The presence of a `VCC` pin means it is *not* a bare LED-and-resistor board,
+but these modules ship in two different designs and you cannot tell which you
+have by looking:
+
+- **With a driver transistor** — the LED is fed from `VCC` and `DAT` only
+  switches the transistor's base. The LED current comes from your supply, not
+  from the GPIO, so you can run `VCC` at 5 V and get real range with no extra
+  parts.
+- **Direct drive** — `DAT` feeds the LED through a resistor and `VCC` only
+  powers an indicator. Current is capped by what the GPIO can source (~20 mA),
+  so expect 1–2 m however you wire it.
+
+#### Telling them apart (two minutes, multimeter)
+
+With the module **unpowered and disconnected**, set the meter to resistance,
+and measure to the LED's anode — the pad marked **`+`** next to the LED:
+
+| Measure | Reading | Means |
+|---|---|---|
+| `VCC` → LED `+` | 0 Ω, or tens of ohms | LED is fed from VCC → **transistor driver**. Move `VCC` to 5 V for full range. |
+| `DAT` → LED `+` | ~100–330 Ω | LED is fed from DAT → **direct drive**. Range is GPIO-limited. |
+
+One of the two will read low and the other open or very high. That tells you
+which design you have.
+
+**If it turns out to be direct drive** and you want more than a couple of
+metres, the module is still useful: leave its LED in place, cut or lift the
+track from `DAT`, and drive the LED from a 2N2222 collector as in the schematic
+above. Or just fit a separate 5 mm IR LED on the transistor and keep the module
+as a spare.
+
+Either way, **start with `VCC` on 3V3**. It is safe in both designs, and it
+lets you confirm the firmware transmits before you change anything.
 
 ---
 
