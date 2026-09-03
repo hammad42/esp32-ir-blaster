@@ -92,11 +92,6 @@
       a nearby wall. Checks the receiver, the transmitter and the wiring in one
       go, with no remote and no appliance needed.
     </p>
-    <div class="row">
-      <button class="btn primary" id="btn-selftest">Run self-test</button>
-      <span class="muted" id="selftest-busy" hidden>Testing…</span>
-    </div>
-
     <details class="advanced">
       <summary>Send a specific code instead</summary>
       <p class="note">
@@ -121,7 +116,16 @@
           <input type="number" id="st-bits" placeholder="32" min="1" max="64">
         </label>
       </div>
+      <div class="row">
+        <button class="btn" id="btn-selftest-clear">Clear and use the default</button>
+      </div>
     </details>
+
+    <div class="row">
+      <button class="btn primary" id="btn-selftest">Run self-test</button>
+      <span class="muted" id="selftest-busy" hidden>Testing…</span>
+    </div>
+
     <div id="selftest-result" hidden>
       <div class="learn-state">
         <div class="learn-big" id="selftest-headline"></div>

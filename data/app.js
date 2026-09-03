@@ -412,6 +412,26 @@ $('#btn-learn-save').onclick = async () => {
 
 /* --------------------------------------------------------------- self-test */
 
+// The one button drives both the default test and the custom-code one, so it
+// says which it will do -- otherwise filling in the fields and pressing a
+// button labelled "Run self-test" gives no clue that the fields were used.
+function refreshSelfTestButton() {
+  const btn = $('#btn-selftest');
+  if (!btn) return;
+  const proto = ($('#st-protocol').value || '').trim();
+  const val = ($('#st-value').value || '').trim();
+  const bits = ($('#st-bits').value || '').trim();
+  const custom = proto || val || bits;
+  btn.textContent = custom
+    ? `Send ${(proto || 'NEC').toUpperCase()} ${val || '(default value)'}`
+    : 'Run self-test';
+}
+
+['#st-protocol', '#st-value', '#st-bits'].forEach((sel) => {
+  const el = $(sel);
+  if (el) el.addEventListener('input', refreshSelfTestButton);
+});
+
 // Bound defensively. A stale cached page can pair new markup with old script
 // or the reverse; a missing element must not throw here, because a top-level
 // exception would take every handler defined *after* it down as well.
@@ -470,6 +490,14 @@ onClick('#btn-selftest', async () => {
     btn.disabled = false;
     $('#selftest-busy').hidden = true;
   }
+});
+
+onClick('#btn-selftest-clear', () => {
+  ['#st-protocol', '#st-value', '#st-bits'].forEach((s) => {
+    const el = $(s);
+    if (el) el.value = '';
+  });
+  refreshSelfTestButton();
 });
 
 $('#monitor-toggle').addEventListener('change', async (e) => {

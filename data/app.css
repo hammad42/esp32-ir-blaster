@@ -267,8 +267,5 @@ input[type=file] { padding: 7px; }
 details.advanced { margin: 12px 0 0; }
 details.advanced > summary {
   cursor: pointer; color: var(--accent); font-size: 13px; padding: 4px 0;
-  list-style: none; user-select: none;
+  user-select: none;
 }
-details.advanced > summary::-webkit-details-marker { display: none; }
-details.advanced > summary::before { content: "B8  "; }
-details.advanced[open] > summary::before { content: "BE  "; }
