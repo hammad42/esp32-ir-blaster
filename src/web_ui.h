@@ -84,6 +84,10 @@ class WebUi {
   // -- OTA --
   void otaFinish();
   void otaUpload(bool filesystem);
+  /// Remounts LittleFS if a filesystem update unmounted it. Idempotent, and
+  /// called from every path that can end an update -- including the ones that
+  /// fail before a single byte is written.
+  void remountFsIfNeeded();
 
   /// True only if the filesystem actually contains any pre-compressed asset.
   /// Probing for a ".gz" that is not there costs an ERROR log line per
@@ -93,6 +97,8 @@ class WebUi {
   WebServer server_{80};
   bool      otaActive_ = false;
   bool      otaOk_ = false;
+  /// True between LittleFS.end() and the remount, so no exit path can forget.
+  bool      fsUnmounted_ = false;
   String    otaError_;
 };
 

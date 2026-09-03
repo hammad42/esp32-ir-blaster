@@ -114,7 +114,27 @@ bool IrService::consumeDecode() {
   }
   if (results_.rawlen <= IR_MIN_RAWLEN) return false;  // noise, keep listening
 
-  const uint16_t need = getCorrectedRawLength(&results_);
+  // Count exactly what the write loop below will emit, walking exactly the
+  // elements it will read.
+  //
+  // The library's getCorrectedRawLength() cannot be used for this: it budgets
+  // over rawbuf[0 .. rawlen-2], while we write rawbuf[1 .. rawlen-1]. Those are
+  // different sets. It therefore reserves split-space for rawbuf[0] -- the
+  // leading silence, which we drop and never write -- and reserves none for the
+  // final element, which we do write. If that last interval exceeds 65535 us it
+  // costs two entries nobody budgeted for, and the write runs past the end of
+  // capBuf_. The leading gap is normally the largest value in the buffer, so its
+  // surplus has been masking the shortfall; that is luck, not correctness.
+  uint32_t need = 0;
+  for (uint16_t i = 1; i < results_.rawlen; i++) {
+    uint32_t usecs = (uint32_t)results_.rawbuf[i] * kRawTick;
+    while (usecs > UINT16_MAX) {
+      need += 2;
+      usecs -= UINT16_MAX;
+    }
+    need += 1;
+  }
+
   if (need == 0) return false;
   if (capLen_ + need > IR_MAX_RAW) {
     learnError_ = "signal does not fit in the capture buffer";
@@ -127,14 +147,21 @@ bool IrService::consumeDecode() {
   // into a max-length mark plus a zero-length partner, exactly as the library's
   // own resultToRawArray() does -- we inline it to avoid a heap allocation on
   // every single capture.
+  //
+  // The bound above is exact, so the guard inside the loop is unreachable by
+  // construction. It stays because this writes into a fixed buffer from
+  // interrupt-sourced data: if that arithmetic is ever wrong again, this turns
+  // silent memory corruption into a reported error.
   uint16_t pos = capLen_;
   for (uint16_t i = 1; i < results_.rawlen; i++) {
     uint32_t usecs = (uint32_t)results_.rawbuf[i] * kRawTick;
     while (usecs > UINT16_MAX) {
+      if (pos + 2 > IR_MAX_RAW) goto overflow;
       capBuf_[pos++] = UINT16_MAX;
       capBuf_[pos++] = 0;
       usecs -= UINT16_MAX;
     }
+    if (pos + 1 > IR_MAX_RAW) goto overflow;
     capBuf_[pos++] = (uint16_t)usecs;
   }
 
@@ -155,6 +182,15 @@ bool IrService::consumeDecode() {
   learnState_ = LearnState::Captured;
   LOGI("learn: captured %s, %u entries, part %u", capturedProtocolName().c_str(),
        capFrameLen_[capFrames_ - 1], capFrames_);
+  return true;
+
+overflow:
+  // Only reachable if the pre-count above is ever wrong. Discard the partial
+  // frame rather than keeping a truncated one that would transmit as garbage.
+  learnError_ = "internal error: capture exceeded its own bound";
+  learnState_ = LearnState::Error;
+  LOGE("learn: capture bound violated at pos=%u (cap=%u)", pos,
+       (unsigned)IR_MAX_RAW);
   return true;
 }
 

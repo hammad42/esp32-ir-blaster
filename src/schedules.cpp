@@ -136,6 +136,20 @@ const char* ScheduleManager::remove(uint8_t id) {
 }
 
 void ScheduleManager::pruneMissingCommands() {
+  // Never read an empty command store as "the user deleted everything".
+  //
+  // At boot, a store that came up empty is far more likely to be a failed mount
+  // or an emergency format than a real deletion -- and this function does not
+  // just drop the schedules, it persists that conclusion to flash. That turns a
+  // transient storage fault into permanent, silent data loss. Keeping orphaned
+  // schedules costs nothing: they simply fail to fire and show as "missing
+  // command" in the UI, which is a far better failure than losing them.
+  if (irStore.count() == 0 && count_ > 0) {
+    LOGW("sched: command store is empty -- keeping %u schedule(s) rather than "
+         "assuming they are orphaned", count_);
+    return;
+  }
+
   bool changed = false;
   for (uint8_t i = 0; i < count_;) {
     if (!irStore.find(items_[i].commandId)) {

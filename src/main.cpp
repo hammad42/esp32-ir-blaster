@@ -129,8 +129,9 @@ void setup() {
   LOGI("macro buttons on GPIO %d and %d", PIN_MACRO_1, PIN_MACRO_2);
 #endif
 
-  // Mounts LittleFS (formatting it if unmountable) and indexes stored commands.
-  if (!irStore.begin()) {
+  // Mounts LittleFS and indexes stored commands.
+  const bool storageOk = irStore.begin();
+  if (!storageOk) {
     LOGE("boot: storage unavailable -- learned commands will not persist");
   }
 
@@ -139,7 +140,15 @@ void setup() {
   }
 
   scheduleManager.begin();
-  scheduleManager.pruneMissingCommands();
+  // Only tidy up orphaned schedules when the command store is actually
+  // trustworthy. Pruning writes the result to flash, so running it against a
+  // store that failed to mount would permanently delete schedules whose
+  // commands are still perfectly intact on a partition we simply could not read.
+  if (storageOk) {
+    scheduleManager.pruneMissingCommands();
+  } else {
+    LOGW("sched: skipping orphan cleanup, storage did not mount");
+  }
 
   statusDisplay.begin(PIN_I2C_SDA, PIN_I2C_SCL);
 
