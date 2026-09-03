@@ -667,21 +667,56 @@ $('#btn-save-settings').onclick = async () => {
   } catch (e) { toast(e.message, 'bad'); }
 };
 
-$('#btn-wifi-scan').onclick = async () => {
+// Signal bars from RSSI. -50 or better is excellent, -80 is barely usable.
+function rssiBars(rssi) {
+  if (rssi >= -55) return '▁▃▅▇';
+  if (rssi >= -65) return '▁▃▅';
+  if (rssi >= -75) return '▁▃';
+  return '▁';
+}
+
+onClick('#btn-wifi-scan', async () => {
+  const btn = $('#btn-wifi-scan');
+  btn.disabled = true;
   $('#scan-status').textContent = 'Scanning…';
   try {
     const r = await api('/api/wifi/scan');
     const seen = {};
     const nets = r.networks.filter((n) => n.ssid && !seen[n.ssid] && (seen[n.ssid] = 1));
     nets.sort((a, b) => b.rssi - a.rssi);
-    $('#ssid-options').innerHTML =
-      nets.map((n) => `<option value="${esc(n.ssid)}">${n.rssi} dBm${n.secure ? '' : ' (open)'}</option>`).join('');
-    $('#scan-status').textContent = nets.length + ' networks found — open the SSID box';
+
+    // Rendered as an explicit list, NOT a <datalist>. A datalist attached to a
+    // text input filters itself by whatever is already typed there -- and the
+    // SSID box is pre-filled with the current network, so a scan that found
+    // nine networks would offer exactly one, with no hint why.
+    const box = $('#scan-results');
+    box.innerHTML = nets.map((n) => `
+      <button type="button" class="scan-row" data-ssid="${esc(n.ssid)}">
+        <span class="scan-bars">${rssiBars(n.rssi)}</span>
+        <span class="scan-name">${esc(n.ssid)}</span>
+        <span class="scan-meta">${n.rssi} dBm${n.secure ? '' : ' · open'}</span>
+      </button>`).join('');
+    box.hidden = nets.length === 0;
+
+    $$('#scan-results .scan-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        $('#set-wifiSsid').value = row.dataset.ssid;
+        $$('#scan-results .scan-row').forEach((r2) => r2.classList.remove('sel'));
+        row.classList.add('sel');
+        $('#set-wifiPass').focus();
+      });
+    });
+
+    $('#scan-status').textContent = nets.length
+      ? `${nets.length} found — tap one to use it`
+      : 'no networks found';
   } catch (e) {
     $('#scan-status').textContent = '';
     toast(e.message, 'bad');
+  } finally {
+    btn.disabled = false;
   }
-};
+});
 
 $('#btn-mqtt-rediscover').onclick = async () => {
   try { await post('/api/mqtt/discovery'); toast('Discovery republished', 'ok'); }

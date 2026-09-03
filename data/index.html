@@ -187,8 +187,8 @@
     <h2>WiFi</h2>
     <div class="grid2">
       <label>Network (SSID)
-        <input id="set-wifiSsid" list="ssid-options" maxlength="32">
-        <datalist id="ssid-options"></datalist>
+        <input id="set-wifiSsid" maxlength="32"
+               placeholder="type it, or scan below">
       </label>
       <div class="field">
         <label for="set-wifiPass">Password <span class="muted" id="wifi-pass-hint"></span></label>
@@ -212,6 +212,7 @@
       <button class="btn" id="btn-wifi-scan">Scan networks</button>
       <span class="muted" id="scan-status"></span>
     </div>
+    <div id="scan-results" class="scan-results" hidden></div>
   </div>
 
   <div class="card">
