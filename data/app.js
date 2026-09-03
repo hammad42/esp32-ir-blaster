@@ -629,9 +629,13 @@ $('#btn-save-settings').onclick = async () => {
   });
   SETTING_BOOLS.forEach((k) => { const el = $('#set-' + k); if (el) body[k] = el.checked; });
 
-  // Empty password boxes mean "leave the stored secret alone", so they are
-  // omitted from the request entirely rather than sent as "".
+  // Absent means "leave the stored secret alone"; present means "set it to
+  // this", and an explicit empty string is how a secret gets cleared. Ticking
+  // Clear is the only way to send that empty string -- typing nothing still
+  // means no change, which is what people expect from a password box.
   ['wifiPass', 'apPass', 'mqttPass', 'authPass'].forEach((k) => {
+    const clear = $('#clr-' + k);
+    if (clear && clear.checked) { body[k] = ''; return; }
     const v = $('#set-' + k).value;
     if (v) body[k] = v;
   });
@@ -643,7 +647,14 @@ $('#btn-save-settings').onclick = async () => {
 
   try {
     const r = await post('/api/settings', body);
-    ['wifiPass', 'apPass', 'mqttPass', 'authPass'].forEach((k) => { $('#set-' + k).value = ''; });
+    // Reset both the boxes and the Clear ticks, so a second save does not
+    // silently repeat a clear the user only meant once.
+    ['wifiPass', 'apPass', 'mqttPass', 'authPass'].forEach((k) => {
+      const el = $('#set-' + k);
+      if (el) el.value = '';
+      const clr = $('#clr-' + k);
+      if (clr) clr.checked = false;
+    });
     if (r.wifiChanged) {
       $('#settings-hint').textContent =
         'WiFi settings changed — the device is reconnecting and may move to a new address.';

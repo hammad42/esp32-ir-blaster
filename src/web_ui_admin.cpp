@@ -219,16 +219,21 @@ void WebUi::apiSetSettings() {
 
   assignIfPresent(doc, "hostname", s.hostname, sizeof(s.hostname));
   assignIfPresent(doc, "wifiSsid", s.wifiSsid, sizeof(s.wifiSsid));
-  // Blank password fields mean "unchanged", never "clear".
-  if (!doc["wifiPass"].isNull() && strlen(doc["wifiPass"] | "") > 0)
-    copyStr(s.wifiPass, sizeof(s.wifiPass), doc["wifiPass"].as<const char*>());
-  if (!doc["apPass"].isNull() && strlen(doc["apPass"] | "") > 0)
-    copyStr(s.apPass, sizeof(s.apPass), doc["apPass"].as<const char*>());
+  // Secrets follow ordinary REST semantics: a field that is ABSENT is left
+  // alone, a field that is PRESENT is written -- including when it is an empty
+  // string, which is how a password gets cleared.
+  //
+  // Refusing empty strings outright, as this used to, made some secrets
+  // impossible to remove: you could never join an open WiFi network, drop to an
+  // anonymous MQTT broker, or open up the setup AP again. The only way out was a
+  // factory reset, which also destroys every learned command. The browser only
+  // sends these fields when the user explicitly asks to clear or change one.
+  assignIfPresent(doc, "wifiPass", s.wifiPass, sizeof(s.wifiPass));
+  assignIfPresent(doc, "apPass", s.apPass, sizeof(s.apPass));
 
   if (!doc["authEnabled"].isNull()) s.authEnabled = doc["authEnabled"];
   assignIfPresent(doc, "authUser", s.authUser, sizeof(s.authUser));
-  if (!doc["authPass"].isNull() && strlen(doc["authPass"] | "") > 0)
-    copyStr(s.authPass, sizeof(s.authPass), doc["authPass"].as<const char*>());
+  assignIfPresent(doc, "authPass", s.authPass, sizeof(s.authPass));
   // Refuse to lock the user out with an empty password.
   if (s.authEnabled && s.authPass[0] == '\0') {
     s.authEnabled = false;
@@ -238,8 +243,7 @@ void WebUi::apiSetSettings() {
   assignIfPresent(doc, "mqttHost", s.mqttHost, sizeof(s.mqttHost));
   if (!doc["mqttPort"].isNull()) s.mqttPort = doc["mqttPort"];
   assignIfPresent(doc, "mqttUser", s.mqttUser, sizeof(s.mqttUser));
-  if (!doc["mqttPass"].isNull() && strlen(doc["mqttPass"] | "") > 0)
-    copyStr(s.mqttPass, sizeof(s.mqttPass), doc["mqttPass"].as<const char*>());
+  assignIfPresent(doc, "mqttPass", s.mqttPass, sizeof(s.mqttPass));
   assignIfPresent(doc, "mqttBase", s.mqttBase, sizeof(s.mqttBase));
   if (!doc["haDiscovery"].isNull()) s.haDiscovery = doc["haDiscovery"];
   assignIfPresent(doc, "haPrefix", s.haPrefix, sizeof(s.haPrefix));
