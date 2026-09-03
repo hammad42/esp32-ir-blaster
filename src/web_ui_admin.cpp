@@ -424,6 +424,11 @@ void WebUi::apiMqttDiscovery() {
 // ---------------------------------------------------------------------------
 
 void WebUi::otaFinish() {
+  // Backstop: this is the last thing to run for any upload, however it ended.
+  // If some path above returned without remounting, catch it here rather than
+  // leaving the device storage-less until the next reboot.
+  if (!otaOk_) remountFsIfNeeded();
+
   // Reached after the whole multipart body has been consumed.
   if (otaOk_) {
     server_.sendHeader("Connection", "close");
@@ -463,12 +468,19 @@ void WebUi::otaUpload(bool filesystem) {
     // Quiesce everything that could compete for the flash or the CPU.
     irService.cancelLearn();
     irService.setMonitor(false);
-    if (filesystem) LittleFS.end();
+    if (filesystem) {
+      LittleFS.end();
+      fsUnmounted_ = true;
+    }
 
     const int command = filesystem ? U_SPIFFS : U_FLASH;
     if (!Update.begin(UPDATE_SIZE_UNKNOWN, command)) {
       otaError_ = Update.errorString();
       LOGE("ota: begin failed: %s", otaError_.c_str());
+      // Nothing has been written yet, so the old filesystem is still intact --
+      // put it straight back. Without this the device would run unmounted until
+      // the next reboot: no web UI, no stored commands, no schedule saves.
+      remountFsIfNeeded();
     }
 
   } else if (up.status == UPLOAD_FILE_WRITE) {
@@ -485,22 +497,46 @@ void WebUi::otaUpload(bool filesystem) {
     indicators.pulseActivity(20);
 
   } else if (up.status == UPLOAD_FILE_END) {
-    if (otaError_.length()) { otaActive_ = false; return; }
+    if (otaError_.length()) {
+      otaActive_ = false;
+      remountFsIfNeeded();
+      return;
+    }
     if (Update.end(true)) {
       otaOk_ = true;
       LOGW("ota: %u bytes applied", (unsigned)up.totalSize);
+      // On success the device reboots in a moment and mounts the new image, so
+      // remounting the old one here would be pointless work on dying state.
     } else {
       otaError_ = Update.errorString();
       LOGE("ota: end failed: %s", otaError_.c_str());
+      remountFsIfNeeded();
     }
-    if (filesystem && !otaOk_) LittleFS.begin(true);   // put the UI back
 
   } else if (up.status == UPLOAD_FILE_ABORTED) {
     Update.abort();
     otaError_ = F("upload aborted");
     otaActive_ = false;
-    if (filesystem) LittleFS.begin(true);
+    remountFsIfNeeded();
     LOGE("ota: aborted by client");
+  }
+}
+
+void WebUi::remountFsIfNeeded() {
+  if (!fsUnmounted_) return;
+  fsUnmounted_ = false;
+
+  // Deliberately begin(false): no format-on-fail. A filesystem update that died
+  // partway can leave the partition half-written, and quietly reformatting it
+  // would destroy every learned command with no warning and no confirmation --
+  // turning a recoverable situation into permanent data loss. Staying unmounted
+  // is recoverable: the PROGMEM recovery page still serves, and it offers a
+  // filesystem upload. A reboot also gets another attempt at a clean mount.
+  if (LittleFS.begin(false)) {
+    LOGW("ota: filesystem remounted after a failed update");
+  } else {
+    LOGE("ota: filesystem will not mount -- reboot, or re-flash littlefs.bin "
+         "from the recovery page. Stored commands are NOT being erased.");
   }
 }
 

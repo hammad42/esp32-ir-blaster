@@ -122,9 +122,19 @@ bool IrStore::readHeader(const char* path, IrFileHeader* hdr) const {
 // ---------------------------------------------------------------------------
 
 bool IrStore::begin() {
-  if (!LittleFS.begin(/*formatOnFail=*/true)) {
-    LOGE("fs: mount failed even after format");
-    return false;
+  // Try a plain mount first. LittleFS.begin(true) formats on *any* failure,
+  // which is right for a blank partition on a first boot and catastrophic for a
+  // partition that is merely damaged -- it erases every learned command with no
+  // warning, and the boot log looks entirely normal afterwards. Formatting is
+  // still available as a last resort, but it is now a deliberate step that says
+  // out loud what it is about to destroy.
+  if (!LittleFS.begin(/*formatOnFail=*/false)) {
+    LOGW("fs: mount failed -- formatting, which ERASES all stored commands");
+    if (!LittleFS.begin(/*formatOnFail=*/true)) {
+      LOGE("fs: mount failed even after format");
+      return false;
+    }
+    LOGW("fs: formatted, starting with an empty command store");
   }
   mounted_ = true;
   if (!LittleFS.exists(IR_DIR)) LittleFS.mkdir(IR_DIR);
