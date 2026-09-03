@@ -204,9 +204,24 @@ Returns the configuration. Secrets are never returned — you get
 
 ### `POST /api/settings`
 
-Send only the fields you want to change. **Omitting a password field leaves the
-stored one alone**; there is no way to accidentally blank a secret by sending an
-empty string.
+Send only the fields you want to change.
+
+Secrets follow ordinary REST semantics:
+
+| Field | Effect |
+|---|---|
+| **absent** | left exactly as it is |
+| **present, non-empty** | set to that value |
+| **present, empty string** | **cleared** |
+
+So `{"wifiPass": ""}` removes the stored WiFi password, which is how you join
+an open network. The same applies to `apPass`, `mqttPass` and `authPass` --
+clearing `authPass` also forces `authEnabled` off, so the API cannot lock you
+out of your own device.
+
+The web UI never sends an empty string by accident: typing nothing in a password
+box still means "no change", and clearing requires ticking that field's
+**Clear it** box.
 
 ```json
 {

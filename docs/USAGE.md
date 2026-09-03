@@ -183,6 +183,31 @@ listed in the log below the bar.
 Take a backup before firmware updates and before experimenting. It is also how
 you clone a second device, or move commands between rooms.
 
+> A **firmware** update keeps your commands -- firmware and filesystem live in
+> separate partitions. A **filesystem** update erases them. Back up first.
+
+### From a terminal
+
+Clicking through the browser is no help in the middle of a flashing script, so
+the same thing is available from the command line:
+
+```bash
+tools/ir-backup.sh save    ir-blaster.local  ir-backup.json
+tools/ir-backup.sh list    ir-backup.json
+tools/ir-backup.sh restore ir-blaster.local  ir-backup.json
+```
+
+`list` prints what an archive holds without touching the device:
+
+```
+  1. AC_Cool_24_Auto      Living Room AC      583 timings, 2 part(s)
+  2. AC_Off               Living Room AC      291 timings, 1 part(s)
+```
+
+Set `IR_AUTH=user:pass` if the device has authentication enabled. Restore posts
+one command per request and reports each by name, so a failure tells you which
+entry was rejected rather than leaving you to guess.
+
 ---
 
 ## Firmware updates
