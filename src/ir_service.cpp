@@ -100,7 +100,19 @@ void IrService::startLearn(uint32_t timeoutMs, bool append) {
 }
 
 void IrService::cancelLearn() {
-  if (learnState_ == LearnState::Waiting) learnState_ = LearnState::Idle;
+  // Discard whatever is pending, from whichever state we are in.
+  //
+  // This used to act only while Waiting, so pressing Discard on a finished
+  // capture changed nothing: the state stayed Captured, the UI redrew the same
+  // card, and -- worse -- capBuf_ kept the data, so a following "capture another
+  // part" appended to the very signal the user had just rejected.
+  learnState_ = LearnState::Idle;
+  learnError_ = "";
+  capLen_ = 0;
+  capFrames_ = 0;
+  capProtocol_ = -1;
+  capBits_ = 0;
+  capValue_ = 0;
   if (!monitor_) setReceiverEnabled(false);
 }
 

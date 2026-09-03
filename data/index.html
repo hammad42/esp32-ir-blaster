@@ -190,17 +190,23 @@
         <input id="set-wifiSsid" list="ssid-options" maxlength="32">
         <datalist id="ssid-options"></datalist>
       </label>
-      <label>Password <span class="muted" id="wifi-pass-hint"></span>
+      <div class="field">
+        <label for="set-wifiPass">Password <span class="muted" id="wifi-pass-hint"></span></label>
         <input id="set-wifiPass" type="password" maxlength="64"
                placeholder="leave blank to keep current">
-      </label>
+        <label class="clearbox"><input type="checkbox" id="clr-wifiPass">
+          Clear it &mdash; join an open network that has no password</label>
+      </div>
       <label>Hostname
         <input id="set-hostname" maxlength="32">
       </label>
-      <label>Setup-AP password <span class="muted">(min 8 chars)</span>
+      <div class="field">
+        <label for="set-apPass">Setup-AP password <span class="muted">(min 8 chars)</span></label>
         <input id="set-apPass" type="password" maxlength="64"
                placeholder="leave blank to keep current">
-      </label>
+        <label class="clearbox"><input type="checkbox" id="clr-apPass">
+          Clear it &mdash; leaves the setup AP open to anyone nearby</label>
+      </div>
     </div>
     <div class="row">
       <button class="btn" id="btn-wifi-scan">Scan networks</button>
@@ -216,10 +222,13 @@
       <label>Broker host<input id="set-mqttHost" maxlength="64"></label>
       <label>Port<input type="number" id="set-mqttPort" min="1" max="65535"></label>
       <label>Username<input id="set-mqttUser" maxlength="32"></label>
-      <label>Password
+      <div class="field">
+        <label for="set-mqttPass">Password</label>
         <input id="set-mqttPass" type="password" maxlength="64"
                placeholder="leave blank to keep current">
-      </label>
+        <label class="clearbox"><input type="checkbox" id="clr-mqttPass">
+          Clear it &mdash; connect to the broker anonymously</label>
+      </div>
       <label>Base topic<input id="set-mqttBase" maxlength="32"></label>
       <label>Discovery prefix<input id="set-haPrefix" maxlength="24"></label>
     </div>
@@ -272,10 +281,13 @@
       Require a username and password</label>
     <div class="grid2">
       <label>Username<input id="set-authUser" maxlength="16"></label>
-      <label>Password
+      <div class="field">
+        <label for="set-authPass">Password</label>
         <input id="set-authPass" type="password" maxlength="32"
                placeholder="leave blank to keep current">
-      </label>
+        <label class="clearbox"><input type="checkbox" id="clr-authPass">
+          Clear it &mdash; this also turns authentication off</label>
+      </div>
     </div>
     <p class="note">
       Basic authentication is sent in the clear over plain HTTP. It keeps
