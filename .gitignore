@@ -28,3 +28,6 @@ secrets.h
 
 # Generated demo build
 build/
+
+# PlatformIO generates this for clangd; it is machine-specific.
+compile_commands.json
