@@ -198,6 +198,26 @@ as a spare.
 Either way, **start with `VCC` on 3V3**. It is safe in both designs, and it
 lets you confirm the firmware transmits before you change anything.
 
+#### Upgrading a direct-drive module for range
+
+If the test says direct drive and 1–2 m is not enough, note first **why the
+obvious fix does not work**: the module's own series resistor (usually 330 Ω)
+sits in the current path. Feeding the `DAT` pin from a transistor still leaves
+that resistor in series, so the current is capped at roughly
+`(5 V − 1.3 V) / 330 Ω ≈ 11 mA` — worse than driving it from the GPIO. The
+resistor cannot be bypassed either: one end is the LED pad, the other is buried
+in the board.
+
+**The LED has to leave the module.** Desolder it (two joints — note which pad
+is `+` first), or leave the module intact as a spare and fit a fresh 940 nm
+5 mm LED. Either way, build the transistor driver from §4 above: 1 kΩ from
+GPIO 4 to the base, 33 Ω from 5 V to the LED anode, LED cathode to the
+collector, emitter to the shared ground, and the 470 µF bulk capacitor across
+the 5 V rail.
+
+No firmware change is needed. An NPN on the low side is non-inverting — GPIO
+high turns the LED on — which is what `IRsend` already assumes.
+
 ---
 
 ## 5. Choosing the LED resistor
