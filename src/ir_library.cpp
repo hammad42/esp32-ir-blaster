@@ -160,11 +160,31 @@ String IrLibrary::describe(const stdAc::state_t& s) const {
 //   byte 5    bit 7 display light, bit 0 economy
 //   byte 8    sum(bytes 0..7) XOR 0xAA -- 18 of 18 agree
 //
-// INFERRED, and NOT verified: the mode field in byte 2 bits 0-2. Every
-// capture was taken in cool, so only cool = 1 is known. The rest follow the
-// ordering these controllers usually use, which is a reasonable guess and
-// nothing more. If heat, dry, fan or auto do not work on your unit, capture
-// one from the remote and the raw command will be correct regardless.
+// The mode field was originally a guess. It has since been measured against
+// one capture per mode off the same remote, and the guess was right:
+//   byte 2 bits 0-2   auto 0, cool 1, dry 2, fan 3, heat 4
+//
+// Those captures also corrected two things this encoder had wrong:
+//
+//   byte 2 bit 4 (0x10) is set in dry, and only in dry. The remote sends 1A
+//   where this encoder used to send 0A.
+//
+//   byte 4 is 0x01 in auto, not the constant 0x00 it was documented as. It
+//   reads 0x00 in every other mode.
+//
+// Both ride in the checksum, and it validates, so they are real bits rather
+// than a decode artefact. Each rests on a single capture per mode, though,
+// so what they *mean* is open -- they are reproduced because that is what the
+// remote sends, not because the field is understood. Reference frames:
+//
+//   auto  AA 11 08 0A 01 44 00 00 B8
+//   cool  AA 11 09 07 00 44 00 00 A5
+//   dry   AA 11 1A 09 00 44 00 00 88
+//   fan   AA 11 0B 0B 00 44 00 00 BF
+//   heat  AA 11 0C 0C 00 44 00 00 BD
+//
+// Fan speed is still not encoded anywhere that has been identified; byte 5
+// held 0x44 across all five, so nothing in these captures separates it.
 //
 // Timings are the mean of the 18 captures. Marks read long and spaces short
 // by ~50 us through a demodulator, so these sit slightly inside the measured
@@ -182,9 +202,8 @@ bool IrLibrary::encodeDawlance(const stdAc::state_t& state, uint8_t bytesOut[9],
   bytesOut[0] = 0xAA;
   bytesOut[1] = 0x11;
 
-  // Byte 2: Mode (bits 0..2) | Power (bit 3) | Turbo (bit 7)
-  // See the note above: only cool is confirmed. The others are an educated
-  // guess at the field ordering.
+  // Byte 2: Mode (bits 0..2) | Power (bit 3) | Dry marker (bit 4) | Turbo (bit 7)
+  // All five modes are confirmed against captures -- see the note above.
   uint8_t modeBits = 1;
   switch (state.mode) {
     case stdAc::opmode_t::kCool: modeBits = 1; break;
@@ -196,6 +215,8 @@ bool IrLibrary::encodeDawlance(const stdAc::state_t& state, uint8_t bytesOut[9],
   }
   bytesOut[2] = (modeBits & 0x07);
   if (state.power) bytesOut[2] |= 0x08;
+  // Dry carries an extra marker bit that no other mode sets.
+  if (state.mode == stdAc::opmode_t::kDry) bytesOut[2] |= 0x10;
   if (state.turbo && state.power) bytesOut[2] |= 0x80;
 
   // Byte 3: Temperature - 16
@@ -204,8 +225,8 @@ bool IrLibrary::encodeDawlance(const stdAc::state_t& state, uint8_t bytesOut[9],
   if (deg > 30) deg = 30;
   bytesOut[3] = (deg - 16) & 0x0F;
 
-  // Byte 4: Reserved
-  bytesOut[4] = 0x00;
+  // Byte 4: Reserved, except in auto, where the remote sends 0x01.
+  bytesOut[4] = (state.mode == stdAc::opmode_t::kAuto) ? 0x01 : 0x00;
 
   // Byte 5: Base 0x44 | Light bit 7 (0x80) | Eco bit 0 (0x01)
   if (state.turbo && state.power) {

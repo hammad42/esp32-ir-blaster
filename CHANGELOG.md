@@ -65,14 +65,23 @@ matters when you are deciding whether to flash a device that is working today.
   captures off a real unit:
 
   ```
-  AA 11 <mode|power|turbo> <temp-16> 00 <flags> 00 00 <checksum>
+  AA 11 <mode|power|dry|turbo> <temp-16> <00, or 01 in auto> <flags> 00 00 <checksum>
   checksum = sum(bytes 0..7) XOR 0xAA
   ```
 
   Verified rather than assumed: the checksum agrees with 18 of 18 captures, and
-  the encoder reproduces every one of them byte for byte, on hardware. One field
-  is not verified -- every capture was taken in *cool*, so the other mode values
-  are an educated guess and are marked as such in the source.
+  the encoder reproduces every one of them byte for byte, on hardware.
+- **All five Dawlance modes are now measured**, from one capture per mode off
+  the same remote. The mode values had been an educated guess taken in cool
+  only; the guess turned out to be right (auto 0, cool 1, dry 2, fan 3, heat 4),
+  but the captures corrected two things around it:
+
+  - byte 2 bit 4 (`0x10`) is set in **dry**, and only in dry
+  - byte 4 is `0x01` in **auto**, not the constant `0x00` it was documented as
+
+  The encoder now reproduces all five reference frames exactly, with the 13 cool
+  temperatures unchanged. `tools/dawlance-decode.pl` decodes a captured frame
+  back to its nine bytes and checks the checksum, which is how this was done.
 - **Preset packs** in `data/presets/`, for remotes the encoder cannot generate.
   The browser fetches a pack and posts each command to `/api/import`, the same
   path a restore takes, so adding a device to the library needs no firmware

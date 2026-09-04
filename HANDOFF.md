@@ -191,9 +191,10 @@ Derived from 18 captures off the unit:
 AA 11 <mode|power|turbo> <temp-16> 00 <flags> 00 00 <checksum>
 
 byte 0,1   constant AA 11
-byte 2     bits 0-2 mode, bit 3 power (09 on / 01 off), bit 7 turbo
+byte 2     bits 0-2 mode, bit 3 power (09 on / 01 off), bit 4 dry, bit 7 turbo
+           mode: auto 0, cool 1, dry 2, fan 3, heat 4
 byte 3     temperature - 16   (16 -> 0x00 ... 28 -> 0x0C)
-byte 4     always 00
+byte 4     00, except 01 in auto
 byte 5     base 0x44, bit 7 display light, bit 0 economy
 byte 6,7   always 00
 byte 8     checksum = sum(bytes 0..7) XOR 0xAA
@@ -214,12 +215,42 @@ mark 460, 38 kHz.
 So `16 °C` from the Library produces `AA 11 09 00 00 C4 00 00 22` — the exact
 frame the remote sends.
 
-> **One field is a guess.** Every capture was taken in *cool*, so only
-> `mode = 1` is measured. Heat, dry, fan and auto follow the ordering these
-> controllers usually use and are marked `INFERRED, and NOT verified` in
-> `src/ir_library.cpp`. **Testing those is the top open task** — see §6. If one
-> is wrong, capturing that button from the remote still gives a correct raw
-> command, and the bytes would let the mapping be fixed properly.
+### All five modes are now measured
+
+The mode field used to be the one guess in the protocol. It has since been
+captured one mode at a time off the same remote, and the guess was right —
+**auto 0, cool 1, dry 2, fan 3, heat 4**. Reference frames:
+
+```
+auto  AA 11 08 0A 01 44 00 00 B8      dry   AA 11 1A 09 00 44 00 00 88
+cool  AA 11 09 07 00 44 00 00 A5      fan   AA 11 0B 0B 00 44 00 00 BF
+heat  AA 11 0C 0C 00 44 00 00 BD
+```
+
+Those captures corrected **two things the encoder had wrong**:
+
+- **byte 2 bit 4 (`0x10`) is set in dry, and only in dry.** The remote sends
+  `1A`; the encoder used to send `0A`.
+- **byte 4 is `0x01` in auto**, not the constant `0x00` it was documented as.
+
+Both ride in the checksum and it validates, so they are real bits rather than a
+decode artefact. Each rests on a **single capture per mode**, though, so what
+they *mean* is open — they are reproduced because that is what the remote
+sends, not because the field is understood.
+
+After the fix the encoder reproduces all five frames exactly, and the 13 cool
+temperatures are unchanged (13/13).
+
+**Still not encoded: fan speed.** Byte 5 read `0x44` in all five captures, so
+nothing here separates it. That is the next field to chase.
+
+`tools/dawlance-decode.pl` turns a captured frame back into its nine bytes and
+checks the checksum — this is how the above was derived:
+
+```bash
+curl -s http://$IP/api/export | perl tools/dawlance-decode.pl
+perl tools/dawlance-decode.pl data/presets/dawlance-inverter.json   # 18/18 ok
+```
 
 ### Preset packs
 
@@ -269,7 +300,9 @@ Body: `protocol` (required) plus `power` `mode` `degrees` `celsius` `fan`
 - Clearing a stored password
 - **Library: 66 protocols listed, preview / send / save all work**
 - **Generated Gree command stores as 56 bytes and sends via the normal path**
-- **Dawlance generation matches captures for every tested combination**
+- **Dawlance generation matches captures for every tested combination** — 13
+  cool temperatures, power on/off, eco, lamp, turbo, and one frame per mode
+  (auto / cool / dry / fan / heat), all byte-exact
 - Watchdog armed; no crashes or brownouts since the 470 µF went in
 
 ---
@@ -278,9 +311,13 @@ Body: `protocol` (required) plus `power` `mode` `degrees` `celsius` `fan`
 
 ### Highest value first
 
-- [ ] **Dawlance modes other than cool.** Library tab → mode **Heat** → Test
-      send. Then dry, fan, auto. This is the one inferred field in the whole
-      protocol. If a mode fails, capture that button and the bytes fix it.
+- [x] ~~**Dawlance modes other than cool.**~~ Done — all five captured and the
+      encoder corrected (§4). The bytes match; **the AC has not yet been made to
+      actually respond in heat / dry / fan / auto**, so send each one at the unit
+      and confirm the display agrees.
+- [ ] **Find where fan speed lives.** Nothing in the five mode captures moves
+      with it. Capture low / medium / high at a fixed mode and temperature and
+      diff the bytes — byte 5, 6 or 7 are the candidates.
 - [ ] **Measure the range** now the transistor is wired as a low-side switch.
       Walk backwards from the unit and note where it stops.
 - [ ] **Set the timezone.** Still `UTC0`; Pakistan is `PKT-5`. Schedules fire on
@@ -373,7 +410,8 @@ partitions. This cost real captures twice.
 
 ## 8. Open issues
 
-**Dawlance modes other than cool are unverified.** See §4. Top of the list.
+**Dawlance fan speed is not encoded.** No captured byte moves with it yet. See
+§4 and §6. This is now the top open protocol question; the modes are done.
 
 **Finding #6 — receiver lockout after transmit with the monitor active.**
 Reported but never reproduced. Every path was traced and they are balanced.
