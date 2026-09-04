@@ -1,0 +1,15 @@
+{
+  "note": "Ready-made command packs for remotes the built-in encoder cannot generate. Each entry points at a file in this folder; the browser installs it by posting each command to /api/import.",
+  "presets": [
+    {
+      "id": "dawlance-inverter",
+      "file": "dawlance-inverter.json",
+      "brand": "Dawlance",
+      "model": "Inverter AC (72-bit, 6.7 ms header)",
+      "type": "ac",
+      "group": "Dawlance AC",
+      "count": 18,
+      "notes": "Captured from a real unit. Not supported by IRremoteESP8266: the frame is 72 bits over a 6.7/3.3 ms header, which matches no protocol in the library. Covers 16-28 C, power on/off, eco, turbo and lamp."
+    }
+  ]
+}
