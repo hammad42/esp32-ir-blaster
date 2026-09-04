@@ -50,6 +50,13 @@ void WebUi::apiLibAc(bool send, bool save) {
   j += irLibrary.describe(st);
   j += F("\"");
 
+  String hex = irLibrary.stateToHex(st);
+  if (hex.length() > 0) {
+    j += F(",\"hex\":\"");
+    j += hex;
+    j += F("\"");
+  }
+
   if (send) {
     String err;
     if (!irLibrary.send(st, err)) { sendError(400, err.c_str()); return; }

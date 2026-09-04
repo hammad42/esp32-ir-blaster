@@ -82,6 +82,13 @@ class IrLibrary {
   /// Human-readable summary of a state, for the UI to echo back what it parsed.
   String describe(const stdAc::state_t& state) const;
 
+  /// Returns a space-separated hex representation of the encoded state, or empty string.
+  String stateToHex(const stdAc::state_t& state) const;
+
+  /// Encodes a state into Dawlance 9-byte packet and 147 raw timings.
+  static bool encodeDawlance(const stdAc::state_t& state, uint8_t bytesOut[9],
+                             uint16_t* rawOut, uint16_t* lenOut);
+
   /// Reads a stored AC-state command back into a state struct.
   /// @return an error string, or nullptr on success.
   const char* load(const char* id, stdAc::state_t* out) const;

@@ -897,9 +897,16 @@ function libPreview() {
     try {
       const r = await post('/api/library/ac/preview', libBody());
       $('#lib-summary').textContent = r.summary;
+      const hexEl = $('#lib-hex');
+      if (hexEl) {
+        hexEl.textContent = r.hex || '';
+        hexEl.hidden = !$('#lib-show-hex')?.checked || !r.hex;
+      }
       $('#lib-status').textContent = '';
     } catch (e) {
       $('#lib-summary').textContent = '—';
+      const hexEl = $('#lib-hex');
+      if (hexEl) { hexEl.textContent = ''; hexEl.hidden = true; }
       $('#lib-status').textContent = e.message;
     }
   }, 200);
@@ -913,6 +920,11 @@ function libPreview() {
     $('#lib-degrees-val').textContent = $('#lib-degrees').value + '\u00B0C';
     libPreview();
   });
+});
+
+$('#lib-show-hex')?.addEventListener('change', () => {
+  const hexEl = $('#lib-hex');
+  if (hexEl) hexEl.hidden = !$('#lib-show-hex').checked || !hexEl.textContent;
 });
 
 onClick('#btn-lib-send', async () => {

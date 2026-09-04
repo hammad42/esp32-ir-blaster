@@ -124,6 +124,8 @@ class IrService {
   /// whether it had been listening so endExternalSend() can put it back.
   bool beginExternalSend();
   void endExternalSend(bool wasRx, const String& what);
+  /// Directly transmits a raw timing buffer at carrier frequency.
+  void blastRawDirect(const uint16_t* raw, uint16_t len, uint16_t freqKhz = DEFAULT_FREQ_KHZ);
   const String& lastSentName() const { return lastSentName_; }
   uint32_t lastSentAt() const { return lastSentAt_; }
   uint32_t txCount() const { return txCount_; }

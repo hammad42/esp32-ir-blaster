@@ -286,8 +286,9 @@ void WebUi::apiCommands() {
     chunk += F("\",\"group\":\"");
     chunk += jsonEscape(m->group);
     chunk += F("\",\"protocol\":\"");
-    chunk += (m->protocol < 0) ? String("UNKNOWN")
-                               : typeToString((decode_type_t)m->protocol, false);
+    chunk += (m->protocol == DAWLANCE_PROTOCOL) ? String("DAWLANCE")
+             : (m->protocol < 0) ? String("UNKNOWN")
+                                 : typeToString((decode_type_t)m->protocol, false);
     chunk += F("\",\"bits\":");
     chunk += m->bits;
     chunk += F(",\"raw\":");

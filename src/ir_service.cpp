@@ -346,6 +346,7 @@ bool IrService::sendStored(const char* id, int repeatsOverride, String& err) {
     if (!irLibrary.send(st, err)) return false;
     lastSentName_ = m->name;   // report the command, not the protocol
     LOGI("tx: '%s' (generated %s)", m->name,
+         (m->protocol == DAWLANCE_PROTOCOL) ? "DAWLANCE" :
          typeToString((decode_type_t)m->protocol, false).c_str());
     return true;
   }
@@ -357,7 +358,7 @@ bool IrService::sendStored(const char* id, int repeatsOverride, String& err) {
   // Regenerate from the protocol when we safely can; otherwise replay timings.
   const decode_type_t proto = (decode_type_t)m->protocol;
   const bool useRaw = (m->flags & IR_FLAG_FORCE_RAW) || m->protocol <= 0 ||
-                      m->bits == 0 || hasACState(proto);
+                      m->bits == 0 || hasACState(proto) || proto == (decode_type_t)DAWLANCE_PROTOCOL;
 
   const bool wasRx = rxEnabled_;
   if (wasRx) setReceiverEnabled(false);   // do not hear our own transmission
@@ -419,7 +420,7 @@ bool IrService::selfTest(SelfTestResult& out, decode_type_t proto,
   // State-based air-conditioner protocols carry a whole byte array, not a
   // 64-bit value, so there is nothing sensible to send from a hex code. Say so
   // rather than transmitting something meaningless and calling it a failure.
-  if (proto <= decode_type_t::UNKNOWN || hasACState(proto)) {
+  if (proto <= decode_type_t::UNKNOWN || hasACState(proto) || proto == (decode_type_t)DAWLANCE_PROTOCOL) {
     out.verdict =
         "that protocol cannot be sent from a plain hex value -- pick a simple "
         "one (NEC, SAMSUNG, SONY, RC5, RC6, PANASONIC, JVC) or learn the "
@@ -569,6 +570,12 @@ void IrService::endExternalSend(bool wasRx, const String& what) {
   txCount_++;
   lastSentName_ = what;
   lastSentAt_ = millis();
+}
+
+void IrService::blastRawDirect(const uint16_t* raw, uint16_t len, uint16_t freqKhz) {
+  if (!send_ || !raw || len == 0) return;
+  send_->sendRaw(raw, len, freqKhz);
+  feedWdt();
 }
 
 bool IrService::sendRawArray(const uint16_t* raw, uint16_t len, uint16_t freqKhz,
