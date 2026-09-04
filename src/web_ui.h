@@ -24,6 +24,9 @@
 extern uint32_t g_rebootAt;
 extern bool     g_factoryReset;
 
+/// Defined in web_ui.cpp; declared here so both translation units can use it.
+String jsonEscape(const char* s);
+
 class WebUi {
  public:
   void begin();
@@ -68,6 +71,8 @@ class WebUi {
   // -- API: built-in remote library --
   void apiLibProtocols();
   void apiLibAc(bool send, bool save);
+  void apiScheduleLog();
+  void apiScheduleLogClear();
   void apiLibTvModels();
   void apiLibTv(bool save);
 

@@ -361,7 +361,7 @@ bool IrService::sendStored(const char* id, int repeatsOverride, String& err) {
                       m->bits == 0 || hasACState(proto) || proto == (decode_type_t)DAWLANCE_PROTOCOL;
 
   const bool wasRx = rxEnabled_;
-  if (wasRx) setReceiverEnabled(false);   // do not hear our own transmission
+  if (wasRx && !listenWhileSending_) setReceiverEnabled(false);
   txBusy_ = true;
   indicators.pulseActivity(120);
 
@@ -389,7 +389,7 @@ bool IrService::sendStored(const char* id, int repeatsOverride, String& err) {
   }
 
   txBusy_ = false;
-  if (wasRx) setReceiverEnabled(true);
+  if (wasRx && !listenWhileSending_) setReceiverEnabled(true);
 
   if (ok) {
     txCount_++;
@@ -399,6 +399,90 @@ bool IrService::sendStored(const char* id, int repeatsOverride, String& err) {
   } else {
     LOGE("tx: '%s' failed: %s", m->name, err.c_str());
   }
+  return ok;
+}
+
+bool IrService::sendStoredVerified(const char* id, int repeatsOverride,
+                                   FireEcho* echo, String& err) {
+  if (echo) *echo = FireEcho();
+
+  // An armed learn owns the receiver. Stealing it here would consume the
+  // capture the user is standing in front of the blaster waiting for, so the
+  // fire goes out unverified instead. Missing evidence beats a lost capture.
+  if (learnState_ == LearnState::Waiting) {
+    return sendStored(id, repeatsOverride, err);
+  }
+
+  const bool wasRx = rxEnabled_;
+  const bool wasMonitor = monitor_;
+  monitor_ = false;   // the echo is ours, not traffic worth reporting
+
+  // Listen to ourselves, deliberately. resume() is only safe on a receiver
+  // that is actually enabled -- calling it on a stopped one dereferences a
+  // timer that disableIRIn() has already freed.
+  setReceiverEnabled(true);
+  recv_->resume();
+
+  listenWhileSending_ = true;
+  const bool ok = sendStored(id, repeatsOverride, err);
+  listenWhileSending_ = false;
+
+  if (ok && echo) {
+    const uint32_t deadline = millis() + SCHED_ECHO_WAIT_MS;
+    while ((int32_t)(millis() - deadline) < 0) {
+      if (recv_->decode(&results_)) {
+        echo->heard = true;
+        echo->protocol = (int16_t)results_.decode_type;
+        echo->value = results_.value;
+        echo->bits = results_.bits;
+        echo->rawLen = getCorrectedRawLength(&results_);
+        rxCount_++;
+
+        // "Heard something" is not "heard ourselves". Compare where there is
+        // anything to compare against.
+        const IrCommandMeta* m = irStore.find(id);
+        if (!m) m = irStore.findByName(id);
+        if (m) {
+          if (m->flags & IR_FLAG_AC_STATE) {
+            // The stored payload is a state struct, not timings, so its
+            // rawLen is the struct size and means nothing here. The frame
+            // length is only known inside the encoder. Report the echo and
+            // say honestly that it was not checked.
+            echo->match = EchoMatch::NotChecked;
+          } else if (m->protocol > 0 && m->bits > 0) {
+            // A simple protocol has an exact answer, same test the self-test
+            // uses. The decoder's choice of NAME can differ (a NEC-timed
+            // frame with non-complementary bytes comes back as NEC_LIKE)
+            // while the payload round-trips perfectly, so judge on the
+            // payload, not the label.
+            echo->match = (results_.value == m->value && results_.bits == m->bits)
+                          ? EchoMatch::Match : EchoMatch::Mismatch;
+          } else if (m->rawLen && echo->rawLen) {
+            // A raw replay has no value to compare, so compare the shape.
+            // The corrected length can differ from what was stored by an
+            // entry or two, and a multi-frame capture is heard one frame at
+            // a time, so accept any frame of roughly the right size.
+            const int got = (int)echo->rawLen;
+            const int want = (int)m->rawLen;
+            const int perFrame = m->frameCount ? want / m->frameCount : want;
+            const int slack = 6;
+            const bool whole = got >= want - slack && got <= want + slack;
+            const bool oneFrame = got >= perFrame - slack && got <= perFrame + slack;
+            echo->match = (whole || oneFrame) ? EchoMatch::Match
+                                              : EchoMatch::Mismatch;
+          }
+        }
+        break;
+      }
+      delay(5);
+      feedWdt();
+    }
+    recv_->resume();
+  }
+
+  setReceiverEnabled(wasRx || wasMonitor);
+  monitor_ = wasMonitor;
+  if (wasMonitor) recv_->resume();
   return ok;
 }
 
@@ -558,7 +642,8 @@ bool IrService::selfTest(SelfTestResult& out, decode_type_t proto,
 
 bool IrService::beginExternalSend() {
   const bool wasRx = rxEnabled_;
-  if (wasRx) setReceiverEnabled(false);
+  // A verified send wants to overhear itself; every other send does not.
+  if (wasRx && !listenWhileSending_) setReceiverEnabled(false);
   txBusy_ = true;
   indicators.pulseActivity(120);
   return wasRx;
@@ -566,7 +651,7 @@ bool IrService::beginExternalSend() {
 
 void IrService::endExternalSend(bool wasRx, const String& what) {
   txBusy_ = false;
-  if (wasRx) setReceiverEnabled(true);
+  if (wasRx && !listenWhileSending_) setReceiverEnabled(true);
   txCount_++;
   lastSentName_ = what;
   lastSentAt_ = millis();

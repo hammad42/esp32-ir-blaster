@@ -4,6 +4,7 @@
  *        OTA, plus route registration. Split from web_ui.cpp purely to keep
  *        both files readable.
  */
+#include <IRutils.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <Update.h>
@@ -78,6 +79,59 @@ void WebUi::apiLibAc(bool send, bool save) {
 
   j += F("}");
   sendJson(200, j);
+}
+
+/// The record of what scheduled fires actually did. Newest first.
+void WebUi::apiScheduleLog() {
+  if (!guard()) return;
+  String j = F("{\"ok\":true,\"fires\":[");
+  for (uint8_t i = 0; i < scheduleManager.logCount(); i++) {
+    const FireLogEntry* e = scheduleManager.logAt(i);
+    if (!e) break;
+    if (i) j += ',';
+    j += F("{\"at\":");
+    j += e->at;
+    j += F(",\"scheduleId\":");
+    j += e->scheduleId;
+    j += F(",\"label\":\"");
+    j += jsonEscape(e->label);
+    j += F("\",\"command\":\"");
+    j += jsonEscape(e->command);
+    j += F("\",\"txOk\":");
+    j += e->txOk ? F("true") : F("false");
+    j += F(",\"heard\":");
+    j += e->heard ? F("true") : F("false");
+    // "unchecked" is a real answer, not a missing one: a generated A/C command
+    // stores a state struct, so there is no frame length to compare against.
+    j += F(",\"match\":\"");
+    j += (e->match == 1) ? F("match") : (e->match == 2) ? F("mismatch")
+                                                        : F("unchecked");
+    j += F("\"");
+    // Only meaningful when something was heard, but always present so the
+    // browser does not have to special-case a missing key.
+    j += F(",\"protocol\":\"");
+    j += (e->protocol < 0) ? String(F("UNKNOWN"))
+                           : typeToString((decode_type_t)e->protocol, false);
+    j += F("\",\"bits\":");
+    j += e->bits;
+    j += F(",\"rawLen\":");
+    j += e->rawLen;
+    j += F(",\"value\":\"0x");
+    char hex[20];
+    snprintf(hex, sizeof(hex), "%llX", (unsigned long long)e->value);
+    j += hex;
+    j += F("\",\"error\":\"");
+    j += jsonEscape(e->error);
+    j += F("\"}");
+  }
+  j += F("]}");
+  sendJson(200, j);
+}
+
+void WebUi::apiScheduleLogClear() {
+  if (!guard()) return;
+  scheduleManager.clearLog();
+  sendJson(200, F("{\"ok\":true}"));
 }
 
 void WebUi::apiLibTvModels() {
@@ -738,6 +792,9 @@ void WebUi::begin() {
   server_.on("/api/schedules", HTTP_GET, [this]() { apiGetSchedules(); });
   server_.on("/api/schedules", HTTP_POST, [this]() { apiSetSchedule(); });
   server_.on("/api/schedules/delete", HTTP_POST, [this]() { apiDeleteSchedule(); });
+  server_.on("/api/schedules/log", HTTP_GET, [this]() { apiScheduleLog(); });
+  server_.on("/api/schedules/log/clear", HTTP_POST,
+             [this]() { apiScheduleLogClear(); });
 
   server_.on("/api/logs", HTTP_GET, [this]() { apiLogs(); });
   server_.on("/api/system/reboot", HTTP_POST, [this]() { apiReboot(); });

@@ -49,7 +49,9 @@ web interface has not been flashed.</p>
 // Small helpers
 // ---------------------------------------------------------------------------
 
-static String jsonEscape(const char* s) {
+/// Escapes a string for embedding in a JSON string literal. Shared with
+/// web_ui_admin.cpp, which writes user-supplied schedule labels.
+String jsonEscape(const char* s) {
   String out;
   if (!s) return out;
   for (const char* p = s; *p; p++) {

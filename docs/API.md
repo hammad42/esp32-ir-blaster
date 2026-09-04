@@ -180,8 +180,9 @@ protocol is missing is still perfectly usable via Learn.
 The list is the 65 IRremoteESP8266 supports plus **`DAWLANCE`**, which is
 implemented here because the library does not know it. Its frame is 72 bits over
 a 6.7/3.3 ms header and matches no protocol upstream, so captures from those
-remotes decode as `UNKNOWN`. Only `mode: "cool"` is verified against real
-hardware; the other modes are inferred.
+remotes decode as `UNKNOWN`. All five modes are verified against captures from
+a real remote, including the two bytes those captures corrected — see the
+Dawlance section of `HANDOFF.md`.
 
 ### Preset packs
 
@@ -260,6 +261,51 @@ Codes are never guessed. A button with no capture reports `false` and the
 endpoints below refuse it, because a wrong IR code is worse than a missing one:
 a missing button is visibly missing, while a wrong one looks fine and silently
 does nothing.
+
+### `GET /api/schedules/log` · `POST /api/schedules/log/clear`
+
+What scheduled fires actually did, newest first. A schedule runs unattended, so
+each fire records both halves: what went out, and what the receiver overheard
+coming back while it went.
+
+```json
+{ "at": 1772668800, "scheduleId": 1, "label": "Bedtime AC off",
+  "command": "AC_Off", "txOk": true, "heard": true,
+  "protocol": "UNKNOWN", "bits": 0, "rawLen": 291, "value": "0x0",
+  "error": "" }
+```
+
+| field | means |
+|---|---|
+| `txOk` | the firmware transmitted without error |
+| `heard` | the receiver decoded something during the listening window |
+| `match` | `match`, `mismatch`, or `unchecked` -- whether what came back is what went out |
+| `protocol` `bits` `value` `rawLen` | what came back; `UNKNOWN` with a `rawLen` is normal for an A/C |
+| `error` | why the send failed, when `txOk` is false |
+
+Three tiers, and they are not the same claim:
+
+- `txOk` is **blind** -- the send function returned without error.
+- `heard` is physical evidence: the demodulator produced pulses and the
+  decoder made sense of them. It does not prove they were *ours*; another
+  remote pressed at that instant would also satisfy it.
+- `match` closes that gap. For a simple protocol it compares value and bit
+  count exactly, the same test the self-test uses. For a raw capture it
+  compares frame length, allowing a few entries of slack and accepting a
+  single frame of a multi-frame command. For a generated A/C command it
+  reports `unchecked`: the stored payload is a state struct, so there is no
+  frame length to compare against.
+
+**None of them can say the appliance reacted** -- an air conditioner sends no
+reply -- so a confirmed fire means the blaster worked, not that the room got
+cooler. It also depends on the receiver being able to hear the emitter; aim
+the LED somewhere the sensor cannot see and every fire reads as not heard.
+
+The log holds the last 16 fires in `/firelog.json`, kept apart from
+`/schedules.json` so rewriting it after every fire cannot endanger the
+schedules themselves. It survives a reboot.
+
+---
 
 ### `POST /api/library/tv/send` · `/save`
 

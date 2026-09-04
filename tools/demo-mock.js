@@ -45,7 +45,34 @@
       { id: 1, enabled: true,  hour: 23, minute: 0,  dow: 127, repeats: 0, cmd: '00000002', label: 'Bedtime AC off' },
       { id: 2, enabled: false, hour: 7,  minute: 30, dow: 62,  repeats: 2, cmd: '00000001', label: 'Morning cool' }
     ],
-    nextSchedId: 3
+    nextSchedId: 3,
+    // Newest first, one of each verdict the fire log can show.
+    fires: [
+      { at: Math.floor(Date.now() / 1000) - 3600, scheduleId: 1,
+        label: 'Bedtime AC off', command: 'AC_Off', txOk: true, heard: true,
+        match: 'match', protocol: 'UNKNOWN', bits: 0, rawLen: 291,
+        value: '0x0', error: '' },
+      { at: Math.floor(Date.now() / 1000) - 90000, scheduleId: 2,
+        label: 'Morning cool', command: 'AC_Cool_24_Auto', txOk: true,
+        heard: false, match: 'unchecked', protocol: 'UNKNOWN', bits: 0,
+        rawLen: 0, value: '0x0', error: '' },
+      { at: Math.floor(Date.now() / 1000) - 176400, scheduleId: 1,
+        label: 'Bedtime AC off', command: 'TV_Power', txOk: true, heard: true,
+        match: 'match', protocol: 'NEC', bits: 32, rawLen: 67,
+        value: '0x20DF10EF', error: '' },
+      { at: Math.floor(Date.now() / 1000) - 180000, scheduleId: 1,
+        label: 'Bedtime AC off', command: 'AC_Cool_24_Auto', txOk: true,
+        heard: true, match: 'unchecked', protocol: 'UNKNOWN', bits: 0,
+        rawLen: 147, value: '0x0', error: '' },
+      { at: Math.floor(Date.now() / 1000) - 200000, scheduleId: 1,
+        label: 'Bedtime AC off', command: 'TV_Volume_Up', txOk: true,
+        heard: true, match: 'mismatch', protocol: 'NEC', bits: 32, rawLen: 67,
+        value: '0x20DF40BF', error: '' },
+      { at: Math.floor(Date.now() / 1000) - 262800, scheduleId: 2,
+        label: '07:30', command: '00000009', txOk: false, heard: false,
+        match: 'unchecked', protocol: 'UNKNOWN', bits: 0, rawLen: 0,
+        value: '0x0', error: 'unknown command' }
+    ]
   };
 
   const settings = {
@@ -196,6 +223,15 @@
         state.schedules.splice(i, 1);
         return { ok: true };
       }
+
+      // One of each outcome, because the three are what the card exists to
+      // tell apart: heard, sent but silent, and refused outright.
+      case '/api/schedules/log':
+        return { ok: true, fires: state.fires };
+
+      case '/api/schedules/log/clear':
+        state.fires = [];
+        return { ok: true };
 
       case '/api/wifi/scan':
         return { ok: true, networks: [

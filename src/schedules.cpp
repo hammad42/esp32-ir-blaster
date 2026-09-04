@@ -21,7 +21,122 @@ void ScheduleManager::begin() {
   memset(items_, 0, sizeof(items_));
   count_ = 0;
   load();
-  LOGI("sched: %u schedules loaded", count_);
+  memset(log_, 0, sizeof(log_));
+  logCount_ = 0;
+  logHead_ = 0;
+  loadLog();
+  LOGI("sched: %u schedules loaded, %u fires logged", count_, logCount_);
+}
+
+// ---------------------------------------------------------------------------
+// Fire log
+// ---------------------------------------------------------------------------
+
+const FireLogEntry* ScheduleManager::logAt(uint8_t i) const {
+  if (i >= logCount_) return nullptr;
+  // Newest first: walk backwards from the head, wrapping.
+  const uint8_t slot = (uint8_t)((logHead_ + SCHED_LOG_MAX - 1 - i) % SCHED_LOG_MAX);
+  return &log_[slot];
+}
+
+void ScheduleManager::recordFire(const Schedule& s, const char* commandName,
+                                 bool txOk, const FireEcho& echo,
+                                 const char* err) {
+  FireLogEntry& e = log_[logHead_];
+  memset(&e, 0, sizeof(e));
+
+  e.at = (uint32_t)time(nullptr);
+  e.scheduleId = s.id;
+  e.txOk = txOk;
+  e.heard = echo.heard;
+  e.match = (uint8_t)echo.match;
+  e.protocol = echo.protocol;
+  e.bits = echo.bits;
+  e.rawLen = echo.rawLen;
+  e.value = echo.value;
+
+  // A label is optional, so fall back to the time the schedule is set for --
+  // an unlabelled entry reading "23:00" is still identifiable.
+  if (s.label[0]) {
+    strlcpy(e.label, s.label, sizeof(e.label));
+  } else {
+    snprintf(e.label, sizeof(e.label), "%02u:%02u", s.hour, s.minute);
+  }
+  strlcpy(e.command, commandName ? commandName : "", sizeof(e.command));
+  if (err) strlcpy(e.error, err, sizeof(e.error));
+
+  logHead_ = (uint8_t)((logHead_ + 1) % SCHED_LOG_MAX);
+  if (logCount_ < SCHED_LOG_MAX) logCount_++;
+  saveLog();
+}
+
+void ScheduleManager::clearLog() {
+  memset(log_, 0, sizeof(log_));
+  logCount_ = 0;
+  logHead_ = 0;
+  LittleFS.remove(SCHED_LOG_FILE);
+}
+
+void ScheduleManager::loadLog() {
+  File f = LittleFS.open(SCHED_LOG_FILE, "r");
+  if (!f) return;
+  JsonDocument doc;
+  const DeserializationError err = deserializeJson(doc, f);
+  f.close();
+  if (err) {
+    LOGW("sched: fire log unreadable (%s), starting a new one", err.c_str());
+    return;
+  }
+  // Stored newest-first; replay oldest-first so the ring ends up in order.
+  JsonArray arr = doc["fires"].as<JsonArray>();
+  if (arr.isNull()) return;
+  const int n = (int)arr.size();
+  for (int i = n - 1; i >= 0; i--) {
+    JsonObject o = arr[i];
+    FireLogEntry& e = log_[logHead_];
+    memset(&e, 0, sizeof(e));
+    e.at = o["at"] | 0u;
+    e.scheduleId = o["id"] | 0;
+    e.txOk = o["txOk"] | false;
+    e.heard = o["heard"] | false;
+    e.match = o["match"] | 0;
+    e.protocol = o["protocol"] | -1;
+    e.bits = o["bits"] | 0;
+    e.rawLen = o["rawLen"] | 0;
+    e.value = o["value"] | 0ull;
+    strlcpy(e.label, o["label"] | "", sizeof(e.label));
+    strlcpy(e.command, o["command"] | "", sizeof(e.command));
+    strlcpy(e.error, o["error"] | "", sizeof(e.error));
+    logHead_ = (uint8_t)((logHead_ + 1) % SCHED_LOG_MAX);
+    if (logCount_ < SCHED_LOG_MAX) logCount_++;
+  }
+}
+
+bool ScheduleManager::saveLog() {
+  JsonDocument doc;
+  JsonArray arr = doc["fires"].to<JsonArray>();
+  for (uint8_t i = 0; i < logCount_; i++) {
+    const FireLogEntry* e = logAt(i);
+    JsonObject o = arr.add<JsonObject>();
+    o["at"] = e->at;
+    o["id"] = e->scheduleId;
+    o["txOk"] = e->txOk;
+    o["heard"] = e->heard;
+    o["match"] = e->match;
+    o["protocol"] = e->protocol;
+    o["bits"] = e->bits;
+    o["rawLen"] = e->rawLen;
+    o["value"] = e->value;
+    o["label"] = e->label;
+    o["command"] = e->command;
+    if (e->error[0]) o["error"] = e->error;
+  }
+  File f = LittleFS.open(SCHED_LOG_FILE, "w");
+  if (!f) { LOGE("sched: cannot write the fire log"); return false; }
+  const bool ok = serializeJson(doc, f) > 0;
+  f.close();
+  if (!ok) LOGE("sched: fire log write failed");
+  return ok;
 }
 
 void ScheduleManager::load() {
@@ -194,12 +309,26 @@ void ScheduleManager::loop() {
     if (s.lastFiredMin == nowMin) continue;
 
     s.lastFiredMin = nowMin;
+
+    // Resolve the name before firing: if the command has since been deleted,
+    // the log should still say what the schedule was pointed at.
+    const IrCommandMeta* m = irStore.find(s.commandId);
+    const char* cmdName = m ? m->name : s.commandId;
+
+    // Fire with the receiver left listening, so the log can record what
+    // actually went out rather than only that we asked for it.
+    FireEcho echo;
     String err;
-    if (irService.sendStored(s.commandId, s.repeats ? s.repeats : -1, err)) {
-      LOGI("sched: fired #%u (%s)", s.id, s.label);
+    const bool ok = irService.sendStoredVerified(s.commandId,
+                                                 s.repeats ? s.repeats : -1,
+                                                 &echo, err);
+    if (ok) {
+      LOGI("sched: fired #%u (%s) -> %s", s.id, s.label,
+           echo.heard ? "echo heard" : "NOTHING HEARD");
     } else {
       LOGE("sched: #%u failed: %s", s.id, err.c_str());
     }
+    recordFire(s, cmdName, ok, echo, ok ? nullptr : err.c_str());
     // One command per tick keeps a burst of simultaneous schedules from
     // blocking the loop for seconds on end.
     break;

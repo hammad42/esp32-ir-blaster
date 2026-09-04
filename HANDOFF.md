@@ -454,6 +454,61 @@ Body: `protocol` (required) plus `power` `mode` `degrees` `celsius` `fan`
 - [ ] **Set the timezone.** Still `UTC0`; Pakistan is `PKT-5`. Schedules fire on
       UTC until this is done.
 - [ ] **Confirm a schedule actually fires.** Created and persisted, never fired.
+      Now much easier to check: the Schedules tab has a **What actually fired**
+      card, and the device records every fire whether or not anyone is watching.
+      Set one a couple of minutes out, walk away, and read the card.
+
+### Schedule fire acknowledgement
+
+A schedule runs unattended, so being configured correctly was previously the
+only assurance that anything happened. Every fire is now recorded.
+
+The trick is the one the self-test already used: a transmit normally deafens
+the receiver so the blaster does not capture its own output, but a *scheduled*
+send deliberately leaves it listening. `IrService::sendStoredVerified()` sets
+`listenWhileSending_`, which makes the four transmit paths skip the usual
+`setReceiverEnabled(false)`, then polls the decoder for `SCHED_ECHO_WAIT_MS`
+afterwards.
+
+**It is a real decode, not a blind send.** The VS1838B demodulates the LED's own
+38 kHz light and the full IRremoteESP8266 decoder runs on the result. Three
+tiers, which are not the same claim:
+
+| Tier | Proves |
+|---|---|
+| `txOk` | **blind** — the send function returned without error |
+| `heard` | the demodulator produced pulses and the decoder made sense of them |
+| `match` | what came back *is* what went out |
+
+`heard` alone does not prove the frame was ours — another remote pressed at that
+instant would satisfy it. `match` closes that: exact value and bit-count
+comparison for a simple protocol (the same test the self-test uses), frame-length
+comparison with a little slack for a raw capture, and `unchecked` for a generated
+A/C command, whose stored payload is a state struct with no frame length to
+compare against.
+
+| Verdict | Means | Suspect |
+|---|---|---|
+| **confirmed** | the frame came back and matches | the blaster is fine — look at the appliance |
+| **heard** | something came back, nothing to compare it to | probably fine; check the timing count looks right |
+| **mismatch** | something came back and it was not ours | interference, or the wrong command fired |
+| **not heard** | the send succeeded but nothing returned | the emitter: transistor, LED, current |
+| **failed** | the send was refused | firmware or storage; the reason is logged |
+
+> **None of these means the appliance obeyed.** An air conditioner sends no
+> reply, so nothing can confirm that from here. They mean the transistor
+> switched and the LED lit — which is the failure that actually happens.
+
+> **It depends on the receiver being able to hear the emitter.** Both are on the
+> same board today and the loopback self-test passes, so this works. Aim the LED
+> somewhere the sensor cannot see and every fire will read **not heard** even
+> though it worked.
+
+Stored in `/firelog.json`, deliberately **not** in `/schedules.json`: it is
+rewritten after every fire, and a bad write must not be able to take the
+schedules with it. Holds the last `SCHED_LOG_MAX` (16) fires and survives a
+reboot. An armed learn keeps the receiver, so a fire during one goes out
+unverified rather than stealing the capture.
 
 ### Library
 - [ ] Bulk "save a temperature range" from the UI against the real AC

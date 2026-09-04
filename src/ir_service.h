@@ -50,6 +50,33 @@ struct SelfTestResult {
   uint16_t expectedBits = 0;
 };
 
+/// What the receiver overheard while a command was being transmitted.
+///
+/// Normally a transmit deafens the receiver so we do not capture our own
+/// output. A *verified* send does the opposite on purpose: the echo is the
+/// only evidence available that the LED actually emitted something, which is
+/// what makes an unattended scheduled fire worth trusting.
+/// Whether what came back is what went out.
+///
+/// Kept separate from @ref FireEcho::heard because they answer different
+/// questions. "Heard" only says the receiver decoded *something* during the
+/// listening window -- someone pressing another remote at that instant would
+/// also satisfy it. "Matched" says the frame was ours.
+enum class EchoMatch : uint8_t {
+  NotChecked = 0,  //!< nothing to compare against; see below
+  Match,
+  Mismatch
+};
+
+struct FireEcho {
+  bool      heard = false;   //!< the receiver decoded something
+  EchoMatch match = EchoMatch::NotChecked;
+  int16_t   protocol = -1;   //!< decode_type_t, -1 = UNKNOWN
+  uint64_t  value = 0;
+  uint16_t  bits = 0;
+  uint16_t  rawLen = 0;
+};
+
 enum class LearnState : uint8_t {
   Idle,       //!< not learning
   Waiting,    //!< armed, waiting for a signal
@@ -98,6 +125,17 @@ class IrService {
   // ---- Transmission -------------------------------------------------------
   /// Sends a stored command. @p repeatsOverride < 0 uses the stored value.
   bool sendStored(const char* id, int repeatsOverride, String& err);
+
+  /// Same as sendStored(), but leaves the receiver running through the
+  /// transmission and reports what it overheard in @p echo.
+  ///
+  /// This is for unattended fires. "The send call returned true" only says the
+  /// firmware tried; hearing the frame come back says the transistor switched
+  /// and the LED lit. It cannot say the appliance reacted -- an air
+  /// conditioner does not answer -- so a heard echo means the blaster worked,
+  /// not that the room got cooler.
+  bool sendStoredVerified(const char* id, int repeatsOverride, FireEcho* echo,
+                          String& err);
   /// Sends an ad-hoc raw array (used by the REST API).
   /// @param label what to report as the last thing sent. Callers with
   ///   something meaningful to say (the TV library names its button) should
@@ -158,6 +196,10 @@ class IrService {
   bool rxEnabled_ = false;
   bool monitor_ = false;
   bool txBusy_ = false;
+  /// While set, the transmit paths skip deafening the receiver, so a verified
+  /// send can overhear itself. Only sendStoredVerified() sets it, and it is
+  /// always cleared before that function returns.
+  bool listenWhileSending_ = false;
 
   LearnState  learnState_ = LearnState::Idle;
   const char* learnError_ = "";

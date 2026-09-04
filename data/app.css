@@ -397,3 +397,13 @@ input[type=range] { accent-color: var(--accent); padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   .tvb, .tvb.sending::after { transition: none; animation: none; }
 }
+
+/* ---------- schedule fire log ---------- */
+
+.fire {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.fire:last-child { border-bottom: 0; }
+.fire .grow { flex: 1; min-width: 0; }
+.fire .pill { flex: 0 0 auto; min-width: 74px; text-align: center; }
