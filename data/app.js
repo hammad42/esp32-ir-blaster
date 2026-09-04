@@ -549,10 +549,20 @@ function fireVerdict(f) {
   if (!f.txOk) return { cls: 'bad',  text: 'failed', detail: f.error || 'the send was refused' };
   if (!f.heard) return { cls: 'warn', text: 'not heard',
                          detail: 'sent, but the receiver heard nothing come back' };
+
   const what = (f.protocol === 'UNKNOWN')
     ? `${f.rawLen} timings`
     : `${f.protocol}, ${f.bits} bits, ${f.value}`;
-  return { cls: 'ok', text: 'heard', detail: 'received ' + what };
+
+  // Hearing something is not hearing ourselves. Only "match" means the frame
+  // that came back is the one that went out.
+  if (f.match === 'match')
+    return { cls: 'ok', text: 'confirmed', detail: 'received ' + what + ', matching what was sent' };
+  if (f.match === 'mismatch')
+    return { cls: 'bad', text: 'mismatch',
+             detail: 'received ' + what + ', which is NOT what was sent' };
+  return { cls: 'warn', text: 'heard',
+           detail: 'received ' + what + ' — identity not checkable for this command' };
 }
 
 async function loadFireLog() {

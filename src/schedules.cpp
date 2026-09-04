@@ -49,6 +49,7 @@ void ScheduleManager::recordFire(const Schedule& s, const char* commandName,
   e.scheduleId = s.id;
   e.txOk = txOk;
   e.heard = echo.heard;
+  e.match = (uint8_t)echo.match;
   e.protocol = echo.protocol;
   e.bits = echo.bits;
   e.rawLen = echo.rawLen;
@@ -98,6 +99,7 @@ void ScheduleManager::loadLog() {
     e.scheduleId = o["id"] | 0;
     e.txOk = o["txOk"] | false;
     e.heard = o["heard"] | false;
+    e.match = o["match"] | 0;
     e.protocol = o["protocol"] | -1;
     e.bits = o["bits"] | 0;
     e.rawLen = o["rawLen"] | 0;
@@ -120,6 +122,7 @@ bool ScheduleManager::saveLog() {
     o["id"] = e->scheduleId;
     o["txOk"] = e->txOk;
     o["heard"] = e->heard;
+    o["match"] = e->match;
     o["protocol"] = e->protocol;
     o["bits"] = e->bits;
     o["rawLen"] = e->rawLen;

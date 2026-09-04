@@ -42,7 +42,8 @@ struct FireLogEntry {
   uint32_t at;             //!< epoch seconds, 0 = empty slot
   uint8_t  scheduleId;
   bool     txOk;           //!< the transmit call succeeded
-  bool     heard;          //!< the receiver decoded our own transmission
+  bool     heard;          //!< the receiver decoded something
+  uint8_t  match;          //!< EchoMatch: 0 not checked, 1 match, 2 mismatch
   int16_t  protocol;       //!< what came back; -1 = UNKNOWN, which is normal
   uint16_t bits;           //!< for an A/C or any raw replay
   uint16_t rawLen;

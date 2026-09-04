@@ -379,13 +379,25 @@
     <p class="muted">
       A schedule runs when nobody is watching, so each one records what it did.
       The blaster keeps its receiver listening through a scheduled send and
-      writes down what it heard itself transmit — which is the only evidence
-      available that the LED really lit.
+      decodes what it hears itself transmit — real evidence that the LED lit,
+      not just that the firmware tried.
     </p>
     <p class="note">
-      <b>Heard</b> means the signal left the blaster. It does <b>not</b> mean the
-      appliance obeyed — an air conditioner sends nothing back, so nothing can
-      confirm that from here.
+      <b>confirmed</b> — the frame came back and matches what was sent.
+      <b>heard</b> — something came back, but this command has nothing to
+      compare against (a generated A/C command stores a state, not timings).
+      <b>mismatch</b> — something came back and it was not ours.
+      <b>not heard</b> — the send succeeded but nothing returned; suspect the
+      LED or the transistor.
+      <b>failed</b> — the send itself was refused.
+    </p>
+    <p class="note">
+      None of these can tell you the appliance <i>obeyed</i> — an air
+      conditioner sends nothing back. They tell you the signal left the
+      blaster, which is the part that actually breaks. This also needs the
+      receiver to be able to hear the LED: if you aim the emitter away and
+      nothing reflects back, every fire will read <b>not heard</b> even though
+      it worked.
     </p>
     <div id="fire-log"></div>
   </div>

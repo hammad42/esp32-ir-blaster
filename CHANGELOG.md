@@ -47,16 +47,21 @@ matters when you are deciding whether to flash a device that is working today.
   The blaster now keeps its receiver listening *through* a scheduled
   transmission and writes down what it heard itself send.
 
-  The Schedules tab gained a **What actually fired** card showing the last 16
-  fires, each as one of three outcomes: **heard** (the signal left the
-  blaster), **not heard** (the send returned success but nothing came back --
-  suspect the emitter), or **failed** (the send was refused). Where the
-  receiver decoded a known protocol the log records it; an A/C shows as
-  `UNKNOWN` with a timing count, which is normal.
+  This is a real decode, not a blind send: the demodulator picks up the LED's
+  own 38 kHz light and the full decoder runs on it. Hearing something is not
+  the same as hearing *ourselves*, though, so the echo is also compared
+  against what was sent -- exactly for a simple protocol, by frame length for
+  a raw capture, and reported as unchecked for a generated A/C command, whose
+  stored payload is a state struct with no frame length to compare against.
 
-  `heard` means the transistor switched and the LED lit. It does **not** mean
-  the appliance obeyed -- an air conditioner sends no reply, so nothing can
-  confirm that from the blaster. The UI says so rather than implying more.
+  The Schedules tab gained a **What actually fired** card showing the last 16
+  fires as **confirmed**, **heard** (unverifiable), **mismatch**, **not
+  heard** (suspect the emitter) or **failed**.
+
+  None of them means the appliance obeyed -- an air conditioner sends no reply,
+  so nothing can confirm that from the blaster. They mean the signal left it,
+  which is the part that actually breaks. It also depends on the receiver
+  being able to hear the emitter, and the UI says so.
 
   Kept in `/firelog.json`, apart from `/schedules.json` so that rewriting it
   after every fire cannot endanger the schedules themselves. Survives a reboot.

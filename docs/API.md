@@ -278,14 +278,28 @@ coming back while it went.
 | field | means |
 |---|---|
 | `txOk` | the firmware transmitted without error |
-| `heard` | the receiver decoded the blaster's own transmission |
+| `heard` | the receiver decoded something during the listening window |
+| `match` | `match`, `mismatch`, or `unchecked` -- whether what came back is what went out |
 | `protocol` `bits` `value` `rawLen` | what came back; `UNKNOWN` with a `rawLen` is normal for an A/C |
 | `error` | why the send failed, when `txOk` is false |
 
-`heard` is the useful one. `txOk` only says the firmware tried; `heard` says
-the transistor switched and the LED lit. **Neither can say the appliance
-reacted** -- an air conditioner sends no reply -- so a heard fire means the
-blaster worked, not that the room got cooler.
+Three tiers, and they are not the same claim:
+
+- `txOk` is **blind** -- the send function returned without error.
+- `heard` is physical evidence: the demodulator produced pulses and the
+  decoder made sense of them. It does not prove they were *ours*; another
+  remote pressed at that instant would also satisfy it.
+- `match` closes that gap. For a simple protocol it compares value and bit
+  count exactly, the same test the self-test uses. For a raw capture it
+  compares frame length, allowing a few entries of slack and accepting a
+  single frame of a multi-frame command. For a generated A/C command it
+  reports `unchecked`: the stored payload is a state struct, so there is no
+  frame length to compare against.
+
+**None of them can say the appliance reacted** -- an air conditioner sends no
+reply -- so a confirmed fire means the blaster worked, not that the room got
+cooler. It also depends on the receiver being able to hear the emitter; aim
+the LED somewhere the sensor cannot see and every fire reads as not heard.
 
 The log holds the last 16 fires in `/firelog.json`, kept apart from
 `/schedules.json` so rewriting it after every fire cannot endanger the

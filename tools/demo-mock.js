@@ -50,18 +50,28 @@
     fires: [
       { at: Math.floor(Date.now() / 1000) - 3600, scheduleId: 1,
         label: 'Bedtime AC off', command: 'AC_Off', txOk: true, heard: true,
-        protocol: 'UNKNOWN', bits: 0, rawLen: 291, value: '0x0', error: '' },
+        match: 'match', protocol: 'UNKNOWN', bits: 0, rawLen: 291,
+        value: '0x0', error: '' },
       { at: Math.floor(Date.now() / 1000) - 90000, scheduleId: 2,
         label: 'Morning cool', command: 'AC_Cool_24_Auto', txOk: true,
-        heard: false, protocol: 'UNKNOWN', bits: 0, rawLen: 0, value: '0x0',
-        error: '' },
+        heard: false, match: 'unchecked', protocol: 'UNKNOWN', bits: 0,
+        rawLen: 0, value: '0x0', error: '' },
       { at: Math.floor(Date.now() / 1000) - 176400, scheduleId: 1,
         label: 'Bedtime AC off', command: 'TV_Power', txOk: true, heard: true,
-        protocol: 'NEC', bits: 32, rawLen: 67, value: '0x20DF10EF', error: '' },
+        match: 'match', protocol: 'NEC', bits: 32, rawLen: 67,
+        value: '0x20DF10EF', error: '' },
+      { at: Math.floor(Date.now() / 1000) - 180000, scheduleId: 1,
+        label: 'Bedtime AC off', command: 'AC_Cool_24_Auto', txOk: true,
+        heard: true, match: 'unchecked', protocol: 'UNKNOWN', bits: 0,
+        rawLen: 147, value: '0x0', error: '' },
+      { at: Math.floor(Date.now() / 1000) - 200000, scheduleId: 1,
+        label: 'Bedtime AC off', command: 'TV_Volume_Up', txOk: true,
+        heard: true, match: 'mismatch', protocol: 'NEC', bits: 32, rawLen: 67,
+        value: '0x20DF40BF', error: '' },
       { at: Math.floor(Date.now() / 1000) - 262800, scheduleId: 2,
         label: '07:30', command: '00000009', txOk: false, heard: false,
-        protocol: 'UNKNOWN', bits: 0, rawLen: 0, value: '0x0',
-        error: 'unknown command' }
+        match: 'unchecked', protocol: 'UNKNOWN', bits: 0, rawLen: 0,
+        value: '0x0', error: 'unknown command' }
     ]
   };
 

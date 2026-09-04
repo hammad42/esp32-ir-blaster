@@ -56,12 +56,25 @@ struct SelfTestResult {
 /// output. A *verified* send does the opposite on purpose: the echo is the
 /// only evidence available that the LED actually emitted something, which is
 /// what makes an unattended scheduled fire worth trusting.
+/// Whether what came back is what went out.
+///
+/// Kept separate from @ref FireEcho::heard because they answer different
+/// questions. "Heard" only says the receiver decoded *something* during the
+/// listening window -- someone pressing another remote at that instant would
+/// also satisfy it. "Matched" says the frame was ours.
+enum class EchoMatch : uint8_t {
+  NotChecked = 0,  //!< nothing to compare against; see below
+  Match,
+  Mismatch
+};
+
 struct FireEcho {
-  bool     heard = false;   //!< the receiver decoded something
-  int16_t  protocol = -1;   //!< decode_type_t, -1 = UNKNOWN
-  uint64_t value = 0;
-  uint16_t bits = 0;
-  uint16_t rawLen = 0;
+  bool      heard = false;   //!< the receiver decoded something
+  EchoMatch match = EchoMatch::NotChecked;
+  int16_t   protocol = -1;   //!< decode_type_t, -1 = UNKNOWN
+  uint64_t  value = 0;
+  uint16_t  bits = 0;
+  uint16_t  rawLen = 0;
 };
 
 enum class LearnState : uint8_t {

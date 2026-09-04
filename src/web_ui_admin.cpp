@@ -101,6 +101,12 @@ void WebUi::apiScheduleLog() {
     j += e->txOk ? F("true") : F("false");
     j += F(",\"heard\":");
     j += e->heard ? F("true") : F("false");
+    // "unchecked" is a real answer, not a missing one: a generated A/C command
+    // stores a state struct, so there is no frame length to compare against.
+    j += F(",\"match\":\"");
+    j += (e->match == 1) ? F("match") : (e->match == 2) ? F("mismatch")
+                                                        : F("unchecked");
+    j += F("\"");
     // Only meaningful when something was heard, but always present so the
     // browser does not have to special-case a missing key.
     j += F(",\"protocol\":\"");

@@ -437,6 +437,41 @@ bool IrService::sendStoredVerified(const char* id, int repeatsOverride,
         echo->bits = results_.bits;
         echo->rawLen = getCorrectedRawLength(&results_);
         rxCount_++;
+
+        // "Heard something" is not "heard ourselves". Compare where there is
+        // anything to compare against.
+        const IrCommandMeta* m = irStore.find(id);
+        if (!m) m = irStore.findByName(id);
+        if (m) {
+          if (m->flags & IR_FLAG_AC_STATE) {
+            // The stored payload is a state struct, not timings, so its
+            // rawLen is the struct size and means nothing here. The frame
+            // length is only known inside the encoder. Report the echo and
+            // say honestly that it was not checked.
+            echo->match = EchoMatch::NotChecked;
+          } else if (m->protocol > 0 && m->bits > 0) {
+            // A simple protocol has an exact answer, same test the self-test
+            // uses. The decoder's choice of NAME can differ (a NEC-timed
+            // frame with non-complementary bytes comes back as NEC_LIKE)
+            // while the payload round-trips perfectly, so judge on the
+            // payload, not the label.
+            echo->match = (results_.value == m->value && results_.bits == m->bits)
+                          ? EchoMatch::Match : EchoMatch::Mismatch;
+          } else if (m->rawLen && echo->rawLen) {
+            // A raw replay has no value to compare, so compare the shape.
+            // The corrected length can differ from what was stored by an
+            // entry or two, and a multi-frame capture is heard one frame at
+            // a time, so accept any frame of roughly the right size.
+            const int got = (int)echo->rawLen;
+            const int want = (int)m->rawLen;
+            const int perFrame = m->frameCount ? want / m->frameCount : want;
+            const int slack = 6;
+            const bool whole = got >= want - slack && got <= want + slack;
+            const bool oneFrame = got >= perFrame - slack && got <= perFrame + slack;
+            echo->match = (whole || oneFrame) ? EchoMatch::Match
+                                              : EchoMatch::Mismatch;
+          }
+        }
         break;
       }
       delay(5);
