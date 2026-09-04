@@ -579,7 +579,7 @@ void IrService::blastRawDirect(const uint16_t* raw, uint16_t len, uint16_t freqK
 }
 
 bool IrService::sendRawArray(const uint16_t* raw, uint16_t len, uint16_t freqKhz,
-                             uint8_t repeats, String& err) {
+                             uint8_t repeats, String& err, const char* label) {
   if (txBusy_) { err = F("transmitter busy"); return false; }
   if (!raw || len == 0 || len > IR_MAX_RAW) { err = F("bad raw data"); return false; }
   if (freqKhz < 30 || freqKhz > 60) freqKhz = DEFAULT_FREQ_KHZ;
@@ -599,7 +599,7 @@ bool IrService::sendRawArray(const uint16_t* raw, uint16_t len, uint16_t freqKhz
   txBusy_ = false;
   if (wasRx) setReceiverEnabled(true);
   txCount_++;
-  lastSentName_ = F("(ad-hoc raw)");
+  lastSentName_ = (label && *label) ? String(label) : String(F("(ad-hoc raw)"));
   lastSentAt_ = millis();
   return true;
 }

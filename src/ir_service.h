@@ -99,8 +99,11 @@ class IrService {
   /// Sends a stored command. @p repeatsOverride < 0 uses the stored value.
   bool sendStored(const char* id, int repeatsOverride, String& err);
   /// Sends an ad-hoc raw array (used by the REST API).
+  /// @param label what to report as the last thing sent. Callers with
+  ///   something meaningful to say (the TV library names its button) should
+  ///   pass it; the default suits a genuinely anonymous blob of timings.
   bool sendRawArray(const uint16_t* raw, uint16_t len, uint16_t freqKhz,
-                    uint8_t repeats, String& err);
+                    uint8_t repeats, String& err, const char* label = nullptr);
 
   /**
    * Loopback self-test: transmits a known frame with the receiver left ON,

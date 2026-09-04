@@ -82,6 +82,24 @@ matters when you are deciding whether to flash a device that is working today.
   The encoder now reproduces all five reference frames exactly, with the 13 cool
   temperatures unchanged. `tools/dawlance-decode.pl` decodes a captured frame
   back to its nine bytes and checks the checksum, which is how this was done.
+- **The Library tab is now split into Air conditioner and TV.** The two panes
+  work in opposite directions and it is worth being explicit about why: an A/C
+  frame carries the unit's whole state, so the useful move is to *generate*
+  one; a TV button is a single fixed code with no state in it, so there is
+  nothing to derive and the firmware holds a table of measured values instead.
+
+  The TV pane draws a remote -- power, volume and channel rockers, plus
+  whatever extras the model knows -- and each press transmits directly.
+  **TCL** ships as the first model, decoded from captures off the real remote.
+  Its frame is NIKAI: 24 bits carrying a 12-bit command followed by its 12-bit
+  complement, which every capture satisfies.
+
+  Buttons with no captured code are drawn disabled rather than hidden, and the
+  endpoints refuse them. Nothing here is guessed: a wrong IR code is worse than
+  a missing one, because a missing button is visibly missing while a wrong one
+  looks fine and silently does nothing.
+
+  New: `GET /api/library/tv/models`, `POST /api/library/tv/send` and `/save`.
 - **Preset packs** in `data/presets/`, for remotes the encoder cannot generate.
   The browser fetches a pack and posts each command to `/api/import`, the same
   path a restore takes, so adding a device to the library needs no firmware

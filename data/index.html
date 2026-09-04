@@ -153,6 +153,12 @@
 
 <!-- ===================== LIBRARY ====================== -->
 <section id="tab-library" class="panel">
+  <div class="subtabs" id="lib-subtabs" role="tablist">
+    <button class="subtab active" data-sub="ac" role="tab">Air conditioner</button>
+    <button class="subtab" data-sub="tv" role="tab">TV</button>
+  </div>
+
+<div id="lib-pane-ac" class="lib-pane active">
   <div class="card">
     <h2>Air conditioner — built in</h2>
     <p class="muted">
@@ -252,6 +258,80 @@
       <pre class="mono" id="lib-log" hidden></pre>
     </details>
   </div>
+</div><!-- /lib-pane-ac -->
+
+<div id="lib-pane-tv" class="lib-pane">
+  <div class="card">
+    <h2>TV — built in</h2>
+    <p class="muted">
+      A television is the opposite of an air conditioner: every button is one
+      fixed code with no state in it, so there is nothing to encode — only the
+      right numbers to remember. These came from capturing a real remote.
+    </p>
+
+    <div class="grid2">
+      <label>Brand / model
+        <select id="tv-model"></select>
+      </label>
+      <label>Group for saved buttons
+        <input id="tv-group" list="group-options" maxlength="24" value="TV">
+      </label>
+    </div>
+
+    <p class="note" id="tv-note" hidden></p>
+
+    <div class="tv-remote" id="tv-remote" hidden>
+      <div class="tv-remote-body">
+        <!-- Drawn rather than set in type: the U+23FB power glyph is missing
+             from most system fonts and renders as a blank box. -->
+        <button class="tvb tvb-power" data-btn="power" title="Power">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+               stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+               aria-hidden="true">
+            <path d="M12 3v9"/>
+            <path d="M6.3 6.3a8 8 0 1 0 11.4 0"/>
+          </svg>
+        </button>
+
+        <div class="tv-rockers">
+          <div class="tv-rocker">
+            <button class="tvb" data-btn="vol_up"><span class="tvb-glyph">+</span></button>
+            <span class="tv-rocker-label">VOL</span>
+            <button class="tvb" data-btn="vol_down"><span class="tvb-glyph">&minus;</span></button>
+          </div>
+          <div class="tv-rocker">
+            <button class="tvb" data-btn="ch_up"><span class="tvb-glyph">+</span></button>
+            <span class="tv-rocker-label">CH</span>
+            <button class="tvb" data-btn="ch_down"><span class="tvb-glyph">&minus;</span></button>
+          </div>
+        </div>
+
+        <div class="tv-extras" id="tv-extras"></div>
+      </div>
+      <div class="tv-remote-caption muted" id="tv-caption">
+        Point the blaster at the set and press a button.
+      </div>
+    </div>
+
+    <p class="note" id="tv-missing" hidden></p>
+  </div>
+
+  <div class="card">
+    <h2>Save as buttons</h2>
+    <p class="muted">
+      Saved entries behave like any learned command — they appear under
+      Remotes, work with schedules and MQTT, and are included in backups.
+    </p>
+    <div class="row">
+      <button class="btn primary" id="btn-tv-save-all">Save every working button</button>
+      <span class="muted" id="tv-save-status"></span>
+    </div>
+    <p class="note">
+      Creates one command per captured button, named after the model — for
+      example <b>TCL Power</b>. Buttons with no code yet are skipped.
+    </p>
+  </div>
+</div><!-- /lib-pane-tv -->
 </section>
 
 <!-- ==================== SCHEDULES ==================== -->

@@ -986,6 +986,162 @@ onClick('#btn-lib-bulk', async () => {
   toast(`Created ${ok} of ${total}`, failed ? 'bad' : 'ok');
 });
 
+/* -------------------------------------------------------------- library: tv */
+
+/* The two halves of the Library tab are different enough to keep apart: the
+   A/C pane builds a state and previews it, while the TV pane is a code table
+   and a set of buttons. They share only the sub-tab strip. */
+
+$$('#lib-subtabs .subtab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $$('#lib-subtabs .subtab').forEach((b) => b.classList.toggle('active', b === btn));
+    const which = btn.dataset.sub;
+    $$('.lib-pane').forEach((p) => {
+      p.classList.toggle('active', p.id === 'lib-pane-' + which);
+    });
+    if (which === 'tv') loadTvLibrary();
+  });
+});
+
+let TV = { models: [], buttons: [], loaded: false };
+
+/* The six the user is entitled to expect on any remote. Anything else the
+   model happens to know is drawn underneath as an extra. */
+const TV_CORE = ['power', 'vol_up', 'vol_down', 'ch_up', 'ch_down'];
+
+async function loadTvLibrary() {
+  if (TV.loaded) return;
+  try {
+    const r = await api('/api/library/tv/models');
+    TV.models = r.models || [];
+    TV.buttons = r.buttons || [];
+    TV.loaded = true;
+
+    if (!TV.models.length) {
+      $('#tv-model').innerHTML = '<option value="">No TV models built in yet</option>';
+      $('#tv-note').textContent =
+        'No TV codes are compiled into this firmware. Capture a remote on the ' +
+        'Learn tab and the codes can be added to the built-in table.';
+      $('#tv-note').hidden = false;
+      return;
+    }
+
+    $('#tv-model').innerHTML = TV.models
+      .map((m) => `<option value="${esc(m.id)}">${esc(m.brand)} — ${esc(m.model)}</option>`)
+      .join('');
+    renderTvRemote();
+  } catch (e) { toast(e.message, 'bad'); }
+}
+
+function tvCurrentModel() {
+  const id = $('#tv-model').value;
+  return TV.models.find((m) => m.id === id) || null;
+}
+
+function renderTvRemote() {
+  const m = tvCurrentModel();
+  if (!m) return;
+
+  $('#tv-note').textContent = m.note || '';
+  $('#tv-note').hidden = !m.note;
+  $('#tv-remote').hidden = false;
+
+  // Core buttons live in fixed positions in the markup, so they are only
+  // enabled or disabled here -- never moved.
+  TV_CORE.forEach((id) => {
+    const el = $(`.tvb[data-btn="${id}"]`);
+    if (!el) return;
+    const known = !!m.buttons[id];
+    el.disabled = !known;
+    el.title = known ? tvLabel(id) : tvLabel(id) + ' — not captured yet';
+  });
+
+  // Anything else this model knows, drawn as extras. Unknown extras are not
+  // rendered at all: a grid of thirteen dead buttons is noise, whereas a
+  // missing volume-down is information.
+  const extras = TV.buttons
+    .filter((b) => !TV_CORE.includes(b.id) && m.buttons[b.id])
+    .map((b) => `<button class="tvb" data-btn="${esc(b.id)}" title="${esc(b.label)}">
+                   <span class="tvb-glyph">${esc(b.label)}</span></button>`)
+    .join('');
+  $('#tv-extras').innerHTML = extras;
+
+  const missing = TV_CORE.filter((id) => !m.buttons[id]).map(tvLabel);
+  const el = $('#tv-missing');
+  if (missing.length) {
+    el.innerHTML = '<b>Not captured yet:</b> ' + esc(missing.join(', ')) +
+      '. Those codes cannot be derived — they are assigned per manufacturer, ' +
+      'so they have to come off the real remote. Capture each one on the ' +
+      'Learn tab and it can be added to the built-in table.';
+    el.hidden = false;
+  } else {
+    el.hidden = true;
+  }
+}
+
+function tvLabel(id) {
+  const b = TV.buttons.find((x) => x.id === id);
+  return b ? b.label : id;
+}
+
+$('#tv-model')?.addEventListener('change', renderTvRemote);
+
+/* One delegated listener, so extras added after render still work. */
+$('#tv-remote')?.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('.tvb');
+  if (!btn || btn.disabled) return;
+  const m = tvCurrentModel();
+  if (!m) return;
+
+  const button = btn.dataset.btn;
+  btn.classList.remove('failed');
+  // Re-trigger the pulse even on a rapid second press.
+  btn.classList.remove('sending');
+  void btn.offsetWidth;
+  btn.classList.add('sending');
+
+  try {
+    const r = await post('/api/library/tv/send', { model: m.id, button });
+    $('#tv-caption').textContent = 'Sent ' + r.label;
+  } catch (e) {
+    btn.classList.add('failed');
+    $('#tv-caption').textContent = e.message;
+    toast(e.message, 'bad');
+  } finally {
+    setTimeout(() => btn.classList.remove('sending'), 450);
+  }
+});
+
+onClick('#btn-tv-save-all', async () => {
+  const m = tvCurrentModel();
+  if (!m) return;
+
+  const known = TV.buttons.filter((b) => m.buttons[b.id]);
+  if (!known.length) { toast('This model has no captured codes yet', 'bad'); return; }
+  if (!confirm(`Save ${known.length} button(s) as commands, named "${m.brand} ..."?`)) return;
+
+  const btn = $('#btn-tv-save-all');
+  const status = $('#tv-save-status');
+  btn.disabled = true;
+
+  let ok = 0, failed = 0;
+  for (const b of known) {
+    status.textContent = `Saving ${b.label}...`;
+    try {
+      await post('/api/library/tv/save', {
+        model: m.id, button: b.id,
+        name: `${m.brand} ${b.label}`, group: $('#tv-group').value.trim() || 'TV'
+      });
+      ok++;
+    } catch (e) { failed++; }
+  }
+
+  status.textContent = `${ok} saved` + (failed ? `, ${failed} skipped` : '');
+  btn.disabled = false;
+  await loadCommands();
+  toast(`Saved ${ok} of ${known.length}`, failed ? 'bad' : 'ok');
+});
+
 /* -------------------------------------------------------------------- boot */
 
 function startStatusPoll() {

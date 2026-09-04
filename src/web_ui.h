@@ -68,6 +68,8 @@ class WebUi {
   // -- API: built-in remote library --
   void apiLibProtocols();
   void apiLibAc(bool send, bool save);
+  void apiLibTvModels();
+  void apiLibTv(bool save);
 
   // -- API: import / export --
   void apiExport();

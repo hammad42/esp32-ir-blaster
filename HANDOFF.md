@@ -252,6 +252,56 @@ curl -s http://$IP/api/export | perl tools/dawlance-decode.pl
 perl tools/dawlance-decode.pl data/presets/dawlance-inverter.json   # 18/18 ok
 ```
 
+### The TV half of the Library tab
+
+The Library tab has two sub-tabs, **Air conditioner** and **TV**, and they work
+in opposite directions:
+
+| | A/C | TV |
+|---|---|---|
+| A frame carries | the unit's whole state | one fixed button code |
+| So the firmware | **generates** it | **remembers** it |
+| Source of truth | `IRac` + the Dawlance encoder | a table of measured values |
+
+A TV code cannot be derived — manufacturers assign them arbitrarily — so the
+table only ever holds values read off a real remote. `TV_NO_CODE` marks a button
+that has not been captured; the UI draws it disabled and the endpoints refuse
+it. **Nothing in that table is guessed**, deliberately: a missing button is
+visibly missing, while a wrong one looks fine and silently does nothing.
+
+Adding a model is a row in `kModels` in `src/tv_library.cpp` — protocol,
+timings and the code array. No other firmware change.
+
+#### TCL — the first model
+
+Decoded from four captures. The protocol is **NIKAI** (24 bit), carrying a
+12-bit command followed by its **12-bit complement**, which is the check that
+says a capture was read correctly:
+
+```
+power    0x0C0F3F   cmd 0C0, ~0C0 = F3F     netflix  0x010FEF   cmd 010, ~010 = FEF
+vol up   0x0D0F2F   cmd 0D0, ~0D0 = F2F     unnamed  0x0A7F58   cmd 0A7, ~0A7 = F58
+```
+
+> **NIKAI inverts the usual bit convention**: a *one* is the SHORT space
+> (1000 µs) and a *zero* is the long one (2000 µs) — the reverse of NEC. Decode
+> a capture with the usual "long space = 1" rule and you get the exact bitwise
+> complement, which still self-validates because the frame carries its own
+> complement. It looks right and is entirely wrong. This cost a pass.
+
+Verified on hardware: a saved `power` regenerates as 155 timings / 3 frames /
+`0x0C0F3F` — structurally identical to the original capture.
+
+**Power is a toggle.** There are no discrete on/off codes in these captures,
+which is normal for a TV, so `power_on` and `power_off` stay unknown and the
+panel shows a single Power button.
+
+**Missing: volume down, channel up, channel down.** See §6.
+
+The fourth capture (`0x0A7F58`, saved as `tcl -`) is a valid frame, but which
+button produced it was never recorded and `0x0A7` does not follow the `0xNN0`
+shape of the other three. It is deliberately *not* mapped onto volume-down.
+
 ### Preset packs
 
 For remotes the encoder cannot generate, `data/presets/` holds installable
@@ -315,6 +365,13 @@ Body: `protocol` (required) plus `power` `mode` `degrees` `celsius` `fan`
       encoder corrected (§4). The bytes match; **the AC has not yet been made to
       actually respond in heat / dry / fan / auto**, so send each one at the unit
       and confirm the display agrees.
+- [ ] **Capture the three missing TCL buttons** — volume down, channel up,
+      channel down. Learn tab, one capture each, then decode with
+      `tools/tcl-decode.pl` and add the values to `kTclCodes` in
+      `src/tv_library.cpp`. Until then those three are drawn disabled.
+- [ ] **Point the TV panel at the actual television.** Power and Netflix have
+      been transmitted and the frames match the captures byte for byte, but
+      **the TV has not been observed reacting** to either.
 - [ ] **Find where fan speed lives.** Nothing in the five mode captures moves
       with it. Capture low / medium / high at a fixed mode and temperature and
       diff the bytes — byte 5, 6 or 7 are the candidates.
