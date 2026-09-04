@@ -46,6 +46,8 @@
 #define IR_GROUP_MAX        25      //!< incl. NUL
 #define IR_ID_LEN            9      //!< 8 hex chars + NUL
 
+#define DAWLANCE_PROTOCOL   250     //!< Custom protocol ID for Dawlance AC
+
 // --------------------------------------------------------------------------
 // Loopback self-test
 // --------------------------------------------------------------------------

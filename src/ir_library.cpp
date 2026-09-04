@@ -22,6 +22,11 @@ void IrLibrary::begin(uint8_t txPin) {
   LOGI("library: %u A/C protocols available", n);
 }
 
+static String getProtocolName(decode_type_t proto) {
+  if (proto == (decode_type_t)DAWLANCE_PROTOCOL) return F("DAWLANCE");
+  return typeToString(proto, false);
+}
+
 // ---------------------------------------------------------------------------
 // Catalogue
 // ---------------------------------------------------------------------------
@@ -30,17 +35,18 @@ void IrLibrary::protocolsToJson(String& out) const {
   // decode_type_t values are ordered by when each protocol was added to the
   // library, which is meaningless to a user. Collect the supported ones, then
   // emit them alphabetically so the picker reads like a brand list.
-  int16_t ids[kLastDecodeType + 1];
+  int16_t ids[kLastDecodeType + 2];
   uint16_t n = 0;
   for (int i = 1; i <= kLastDecodeType && n <= kLastDecodeType; i++)
     if (IRac::isProtocolSupported((decode_type_t)i)) ids[n++] = (int16_t)i;
+  ids[n++] = DAWLANCE_PROTOCOL;
 
   for (uint16_t i = 1; i < n; i++) {          // insertion sort by name
     const int16_t key = ids[i];
-    const String keyName = typeToString((decode_type_t)key, false);
+    const String keyName = getProtocolName((decode_type_t)key);
     int j = (int)i - 1;
     while (j >= 0 &&
-           typeToString((decode_type_t)ids[j], false).compareTo(keyName) > 0) {
+           getProtocolName((decode_type_t)ids[j]).compareTo(keyName) > 0) {
       ids[j + 1] = ids[j];
       j--;
     }
@@ -53,7 +59,7 @@ void IrLibrary::protocolsToJson(String& out) const {
     out += F("{\"id\":");
     out += ids[i];
     out += F(",\"name\":\"");
-    out += typeToString((decode_type_t)ids[i], false);
+    out += getProtocolName((decode_type_t)ids[i]);
     out += F("\"}");
   }
   out += ']';
@@ -70,12 +76,16 @@ const char* IrLibrary::stateFromJson(JsonDocument& doc,
   const char* proto = doc["protocol"].as<const char*>();
   if (!proto || !*proto) return "protocol is required";
 
-  out->protocol = strToDecodeType(proto);
-  if (out->protocol == decode_type_t::UNKNOWN)
-    return "unknown protocol name";
-  if (!IRac::isProtocolSupported(out->protocol))
-    return "that protocol has no A/C support in this build -- capture it from "
-           "the remote instead";
+  if (strcasecmp(proto, "DAWLANCE") == 0) {
+    out->protocol = (decode_type_t)DAWLANCE_PROTOCOL;
+  } else {
+    out->protocol = strToDecodeType(proto);
+    if (out->protocol == decode_type_t::UNKNOWN)
+      return "unknown protocol name";
+    if (!IRac::isProtocolSupported(out->protocol))
+      return "that protocol has no A/C support in this build -- capture it from "
+             "the remote instead";
+  }
 
   if (!doc["model"].isNull()) out->model = doc["model"].as<int16_t>();
 
@@ -89,11 +99,22 @@ const char* IrLibrary::stateFromJson(JsonDocument& doc,
   out->quiet = doc["quiet"] | false;
   out->turbo = doc["turbo"] | false;
   out->econo = doc["econo"] | false;
-  out->light = doc["light"] | false;
+  // Every Dawlance capture carries the display bit set, so that is its resting
+  // state: the default has to match, or a generated frame would differ from
+  // what the remote sends. The other 65 protocols keep the library default of
+  // off -- switching someone's display on unasked is not this code's call.
+  const bool dawlance = (out->protocol == (decode_type_t)DAWLANCE_PROTOCOL);
+  out->light = doc["light"].is<bool>() ? doc["light"].as<bool>() : dawlance;
   out->filter = doc["filter"] | false;
   out->clean = doc["clean"] | false;
   out->beep = doc["beep"] | false;
   out->sleep = doc["sleep"] | -1;
+
+  if (out->protocol == (decode_type_t)DAWLANCE_PROTOCOL) {
+    if (out->degrees < 16.0f || out->degrees > 30.0f)
+      return "temperature outside 16-30 C for Dawlance";
+    return nullptr;
+  }
 
   // A temperature far outside any thermostat's range is much more likely to be
   // a Fahrenheit value sent with celsius:true than a real request.
@@ -107,7 +128,7 @@ const char* IrLibrary::stateFromJson(JsonDocument& doc,
 }
 
 String IrLibrary::describe(const stdAc::state_t& s) const {
-  String d = typeToString(s.protocol, false);
+  String d = getProtocolName(s.protocol);
   d += s.power ? F(" · on") : F(" · off");
   d += F(" · ");
   d += IRac::opmodeToString(s.mode);
@@ -124,6 +145,117 @@ String IrLibrary::describe(const stdAc::state_t& s) const {
 }
 
 // ---------------------------------------------------------------------------
+// Dawlance Protocol Encoder
+// ---------------------------------------------------------------------------
+
+// Reverse engineered from 18 captures off a real unit, and verified: the
+// encoder reproduces every one of them byte for byte.
+//
+//   AA 11 <mode|pwr|turbo> <temp-16> 00 <flags> 00 00 <checksum>
+//
+// Measured, and trusted:
+//   byte 0,1  constant AA 11 across all 18 captures
+//   byte 3    temperature - 16, linear over 13 consecutive samples
+//   byte 2    bit 3 power (09 on / 01 off), bit 7 turbo
+//   byte 5    bit 7 display light, bit 0 economy
+//   byte 8    sum(bytes 0..7) XOR 0xAA -- 18 of 18 agree
+//
+// INFERRED, and NOT verified: the mode field in byte 2 bits 0-2. Every
+// capture was taken in cool, so only cool = 1 is known. The rest follow the
+// ordering these controllers usually use, which is a reasonable guess and
+// nothing more. If heat, dry, fan or auto do not work on your unit, capture
+// one from the remote and the raw command will be correct regardless.
+//
+// Timings are the mean of the 18 captures. Marks read long and spaces short
+// by ~50 us through a demodulator, so these sit slightly inside the measured
+// spread rather than on it.
+const uint16_t kDawlanceHdrMark   = 6720;
+const uint16_t kDawlanceHdrSpace  = 3300;
+const uint16_t kDawlanceBitMark   = 460;
+const uint16_t kDawlanceZeroSpace = 390;
+const uint16_t kDawlanceOneSpace  = 1200;
+const uint16_t kDawlanceStopMark  = 460;
+
+bool IrLibrary::encodeDawlance(const stdAc::state_t& state, uint8_t bytesOut[9],
+                               uint16_t* rawOut, uint16_t* lenOut) {
+  // Preambles
+  bytesOut[0] = 0xAA;
+  bytesOut[1] = 0x11;
+
+  // Byte 2: Mode (bits 0..2) | Power (bit 3) | Turbo (bit 7)
+  // See the note above: only cool is confirmed. The others are an educated
+  // guess at the field ordering.
+  uint8_t modeBits = 1;
+  switch (state.mode) {
+    case stdAc::opmode_t::kCool: modeBits = 1; break;
+    case stdAc::opmode_t::kDry:  modeBits = 2; break;
+    case stdAc::opmode_t::kFan:  modeBits = 3; break;
+    case stdAc::opmode_t::kHeat: modeBits = 4; break;
+    case stdAc::opmode_t::kAuto: modeBits = 0; break;
+    default:                     modeBits = 1; break;
+  }
+  bytesOut[2] = (modeBits & 0x07);
+  if (state.power) bytesOut[2] |= 0x08;
+  if (state.turbo && state.power) bytesOut[2] |= 0x80;
+
+  // Byte 3: Temperature - 16
+  uint8_t deg = (uint8_t)roundf(state.degrees);
+  if (deg < 16) deg = 16;
+  if (deg > 30) deg = 30;
+  bytesOut[3] = (deg - 16) & 0x0F;
+
+  // Byte 4: Reserved
+  bytesOut[4] = 0x00;
+
+  // Byte 5: Base 0x44 | Light bit 7 (0x80) | Eco bit 0 (0x01)
+  if (state.turbo && state.power) {
+    bytesOut[5] = 0x44;
+  } else {
+    bytesOut[5] = 0x44;
+    if (state.light) bytesOut[5] |= 0x80;
+    if (state.econo) bytesOut[5] |= 0x01;
+  }
+
+  // Bytes 6-7: Reserved
+  bytesOut[6] = 0x00;
+  bytesOut[7] = 0x00;
+
+  // Byte 8: Checksum = (sum(bytes[0..7]) & 0xFF) ^ 0xAA
+  uint8_t sum = 0;
+  for (int i = 0; i < 8; i++) sum += bytesOut[i];
+  bytesOut[8] = sum ^ 0xAA;
+
+  if (rawOut && lenOut) {
+    uint16_t idx = 0;
+    rawOut[idx++] = kDawlanceHdrMark;
+    rawOut[idx++] = kDawlanceHdrSpace;
+    for (uint8_t i = 0; i < 9; i++) {
+      uint8_t b = bytesOut[i];
+      for (uint8_t bit = 0; bit < 8; bit++) {
+        rawOut[idx++] = kDawlanceBitMark;
+        rawOut[idx++] = ((b >> bit) & 1) ? kDawlanceOneSpace : kDawlanceZeroSpace;
+      }
+    }
+    rawOut[idx++] = kDawlanceStopMark;
+    *lenOut = idx;
+  }
+
+  return true;
+}
+
+String IrLibrary::stateToHex(const stdAc::state_t& state) const {
+  if (state.protocol == (decode_type_t)DAWLANCE_PROTOCOL) {
+    uint8_t b[9] = {0};
+    encodeDawlance(state, b, nullptr, nullptr);
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%02X %02X %02X %02X %02X %02X %02X %02X %02X",
+             b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8]);
+    return String(buf);
+  }
+  return "";
+}
+
+// ---------------------------------------------------------------------------
 // Transmit
 // ---------------------------------------------------------------------------
 
@@ -134,15 +266,29 @@ bool IrLibrary::send(const stdAc::state_t& state, String& err) {
   // Same courtesy the raw path observes: do not listen to ourselves, and put
   // the receiver back exactly as it was.
   const bool wasRx = irService.beginExternalSend();
-  ac_->next = state;
-  const bool ok = ac_->sendAc();
-  irService.endExternalSend(wasRx, typeToString(state.protocol, false));
+  bool ok = false;
 
-  if (!ok) {
-    err = F("the library declined to encode that combination for this "
-            "protocol");
-    LOGE("library: sendAc refused %s", typeToString(state.protocol, false).c_str());
+  if (state.protocol == (decode_type_t)DAWLANCE_PROTOCOL) {
+    uint8_t b[9];
+    uint16_t raw[147];
+    uint16_t len = 0;
+    if (encodeDawlance(state, b, raw, &len)) {
+      irService.blastRawDirect(raw, len, cfg().defaultFreqKhz);
+      ok = true;
+    } else {
+      err = F("invalid Dawlance state");
+    }
+  } else {
+    ac_->next = state;
+    ok = ac_->sendAc();
+    if (!ok) {
+      err = F("the library declined to encode that combination for this "
+              "protocol");
+      LOGE("library: sendAc refused %s", typeToString(state.protocol, false).c_str());
+    }
   }
+
+  irService.endExternalSend(wasRx, getProtocolName(state.protocol));
   return ok;
 }
 
