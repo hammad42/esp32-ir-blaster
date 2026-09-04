@@ -272,35 +272,57 @@ visibly missing, while a wrong one looks fine and silently does nothing.
 Adding a model is a row in `kModels` in `src/tv_library.cpp` — protocol,
 timings and the code array. No other firmware change.
 
-#### TCL — the first model
+#### TCL — the first model, all 16 buttons
 
-Decoded from four captures. The protocol is **NIKAI** (24 bit), carrying a
-12-bit command followed by its **12-bit complement**, which is the check that
-says a capture was read correctly:
+The four captures off the remote turned out to be enough to identify the whole
+remote, and this is the method worth reusing for the next brand.
 
-```
-power    0x0C0F3F   cmd 0C0, ~0C0 = F3F     netflix  0x010FEF   cmd 010, ~010 = FEF
-vol up   0x0D0F2F   cmd 0D0, ~0D0 = F2F     unnamed  0x0A7F58   cmd 0A7, ~0A7 = F58
-```
+**The protocol is RCA, sent as NIKAI.** IRremoteESP8266 has no RCA encoder, but
+it has NIKAI, and they are the same waveform — 4000/4000 header, 500 µs mark,
+1000/2000 µs spaces. They differ only in which space means one:
 
-> **NIKAI inverts the usual bit convention**: a *one* is the SHORT space
-> (1000 µs) and a *zero* is the long one (2000 µs) — the reverse of NEC. Decode
-> a capture with the usual "long space = 1" rule and you get the exact bitwise
-> complement, which still self-validates because the frame carries its own
-> complement. It looks right and is entirely wrong. This cost a pass.
+| | one | zero |
+|---|---|---|
+| RCA | long (2000 µs) | short (1000 µs) |
+| **NIKAI** | **short (1000 µs)** | **long (2000 µs)** |
 
-Verified on hardware: a saved `power` regenerates as 155 timings / 3 frames /
-`0x0C0F3F` — structurally identical to the original capture.
+So an RCA frame is transmitted by handing the **bitwise complement** of the RCA
+value to NIKAI. Same light, opposite bookkeeping.
 
-**Power is a toggle.** There are no discrete on/off codes in these captures,
-which is normal for a TV, so `power_on` and `power_off` stay unknown and the
-panel shows a single Power button.
+> This cost a pass. Decoding a capture with the usual "long space = 1" rule
+> gives the exact complement of the truth, and because the frame carries its own
+> complement it *still self-validates*. It looks right and is entirely wrong.
 
-**Missing: volume down, channel up, channel down.** See §6.
+**The frame** is 24 bits: `[addr:4][cmd:8][~addr:4][~cmd:8]`, every field **LSB
+first**. TCL is address `0x0F`.
 
-The fourth capture (`0x0A7F58`, saved as `tcl -`) is a valid frame, but which
-button produced it was never recorded and `0x0A7` does not follow the `0xNN0`
-shape of the other three. It is deliberately *not* mapped onto volume-down.
+**How the table was confirmed.** Flipper-IRDB (CC0-1.0) carries a TCL table
+under protocol RCA, address `0x0F`. Re-encoding its entries with
+`tools/flipper-import.pl` reproduces **all four captured 24-bit values exactly**:
+
+| Captured | Reproduced from the table | Saved as |
+|---|---|---|
+| `0xFEF010` | **Netflix** `F7` | `tcl netflix` ✓ |
+| `0xF2F0D0` | **Vol_up** `F4` | `tcl vol+` ✓ |
+| `0xF3F0C0` | **Mute** `FC` | `tcl power` ✗ |
+| `0xF580A7` | **Down** `1A` | `tcl -` ✗ |
+
+Four exact waveform reproductions, two of which also match the label they were
+saved under. That is what makes the rest of the table trustworthy: it is
+confirmed to be the right family and address, so its other buttons describe the
+same remote.
+
+**Two captures were mislabelled**, which is worth knowing rather than quietly
+fixing: `tcl power` is really **Mute**, and `tcl -` is the d-pad **Down**, not
+volume-down. Real power is cmd `0x54`. The original captures are still in the
+store under their old names.
+
+**Power is a toggle** — one code for on and off, normal for a TV. `power_on` and
+`power_off` stay unknown rather than being aliased onto it, which would make
+"turn off" turn the set on half the time.
+
+> **Still unconfirmed: the television has never been seen reacting.** Every code
+> is verified as a *waveform*, not as an effect. See §6.
 
 ### Preset packs
 
@@ -365,13 +387,12 @@ Body: `protocol` (required) plus `power` `mode` `degrees` `celsius` `fan`
       encoder corrected (§4). The bytes match; **the AC has not yet been made to
       actually respond in heat / dry / fan / auto**, so send each one at the unit
       and confirm the display agrees.
-- [ ] **Capture the three missing TCL buttons** — volume down, channel up,
-      channel down. Learn tab, one capture each, then decode with
-      `tools/tcl-decode.pl` and add the values to `kTclCodes` in
-      `src/tv_library.cpp`. Until then those three are drawn disabled.
-- [ ] **Point the TV panel at the actual television.** Power and Netflix have
-      been transmitted and the frames match the captures byte for byte, but
-      **the TV has not been observed reacting** to either.
+- [x] ~~Capture the three missing TCL buttons.~~ Not needed -- the full 16-button
+      set came from Flipper-IRDB, confirmed against the captures (see §4).
+- [ ] **Press Power on the TV panel with the television in view.** Every code
+      is confirmed *as a waveform* -- four reproduce the captures exactly -- but
+      **the TV has never been observed reacting to any of them**. Power, volume
+      and channel are the ones to watch.
 - [ ] **Find where fan speed lives.** Nothing in the five mode captures moves
       with it. Capture low / medium / high at a fixed mode and temperature and
       diff the bytes — byte 5, 6 or 7 are the candidates.

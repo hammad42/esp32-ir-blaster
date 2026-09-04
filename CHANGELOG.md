@@ -100,6 +100,19 @@ matters when you are deciding whether to flash a device that is working today.
   looks fine and silently does nothing.
 
   New: `GET /api/library/tv/models`, `POST /api/library/tv/send` and `/save`.
+- **The full TCL button set**, from Flipper-IRDB (CC0-1.0). Four captures off
+  the remote were enough to identify the whole remote: the database carries a
+  TCL table under protocol RCA at address `0x0F`, and re-encoding its entries
+  reproduces all four captured 24-bit values exactly, two of them also matching
+  the label the capture was saved under. Sixteen buttons now work rather than
+  three.
+
+  IRremoteESP8266 has no RCA encoder, but RCA and NIKAI are the same waveform
+  with the one/zero assignment swapped, so an RCA frame is sent as the bitwise
+  complement under NIKAI. `tools/flipper-import.pl` does the conversion.
+
+  Two of the original captures were mislabelled: what was saved as "power" is
+  Mute, and "tcl -" is the d-pad Down, not volume-down.
 - **Preset packs** in `data/presets/`, for remotes the encoder cannot generate.
   The browser fetches a pack and posts each command to `/api/import`, the same
   path a restore takes, so adding a device to the library needs no firmware

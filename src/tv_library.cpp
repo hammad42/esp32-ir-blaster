@@ -35,52 +35,61 @@ static const TvProtocol kNikai = {
 // ---------------------------------------------------------------------------
 
 /**
- * TCL smart TV.
+ * TCL smart TV -- the RCA family, address 0x0F.
  *
- * Captured off the physical remote and decoded from the raw timings. The frame
- * is a 12-bit command followed by its 12-bit complement, which every one of
- * these satisfies -- that is the check that says they were read correctly:
+ * This set is the whole remote, not the handful of buttons that happened to
+ * get captured, and the way that was established is worth recording.
  *
- *   power    0x0C0F3F   cmd 0C0, ~0C0 = F3F
- *   vol up   0x0D0F2F   cmd 0D0, ~0D0 = F2F
- *   netflix  0x010FEF   cmd 010, ~010 = FEF
- *   unnamed  0x0A7F58   cmd 0A7, ~0A7 = F58
+ * Four buttons were captured off the physical remote. Flipper-IRDB (CC0-1.0)
+ * carries a TCL table under protocol "RCA", address 0x0F. Re-encoding those
+ * table entries through `tools/flipper-import.pl` reproduces all four captured
+ * 24-bit values EXACTLY:
  *
- * That last one was captured under the name "tcl -". The complement checks
- * out so it is a real frame, but which button produced it was never recorded,
- * and 0x0A7 does not follow the 0xNN0 shape of the other three. It is left out
- * rather than guessed onto volume-down, where a wrong code would look like a
- * working button that does nothing.
+ *   captured 0xFEF010 == DB "Netflix"   captured 0xF2F0D0 == DB "Vol_up"
+ *   captured 0xF580A7 == DB "Down"      captured 0xF3F0C0 == DB "Mute"
  *
- * Power is a TOGGLE, like almost every TV. There are no discrete on/off codes
- * to be had, so TVB_POWER_ON and TVB_POWER_OFF stay unknown.
+ * Two of those (Netflix, Vol_up) also match the label the capture was saved
+ * under. Four exact waveform reproductions plus two independent label matches
+ * is what makes the rest of the table trustworthy here: the set is confirmed
+ * to be the right family and address, so its other buttons describe the same
+ * remote.
+ *
+ * The other two captures were mislabelled at capture time, which is worth
+ * knowing rather than quietly correcting: what was saved as "tcl power" is
+ * really MUTE (cmd 0xFC), and "tcl -" is the d-pad DOWN (cmd 0x1A), not
+ * volume-down. Real power is cmd 0x54. Values below are what this firmware
+ * transmits -- NIKAI, i.e. the complement of the RCA value; see kNikai.
+ *
+ * Power is a TOGGLE, like almost every TV: one code for on and off. So
+ * TVB_POWER_ON and TVB_POWER_OFF stay unknown rather than being aliased onto
+ * it, which would make "turn off" turn the set on half the time.
  */
 static const uint32_t kTclCodes[TVB__COUNT] = {
-  /* TVB_POWER     */ 0x0C0F3F,
-  /* TVB_VOL_UP    */ 0x0D0F2F,
-  /* TVB_VOL_DOWN  */ TV_NO_CODE,
-  /* TVB_CH_UP     */ TV_NO_CODE,
-  /* TVB_CH_DOWN   */ TV_NO_CODE,
-  /* TVB_MUTE      */ TV_NO_CODE,
-  /* TVB_INPUT     */ TV_NO_CODE,
-  /* TVB_HOME      */ TV_NO_CODE,
-  /* TVB_BACK      */ TV_NO_CODE,
-  /* TVB_OK        */ TV_NO_CODE,
-  /* TVB_UP        */ TV_NO_CODE,
-  /* TVB_DOWN      */ TV_NO_CODE,
-  /* TVB_LEFT      */ TV_NO_CODE,
-  /* TVB_RIGHT     */ TV_NO_CODE,
-  /* TVB_MENU      */ TV_NO_CODE,
-  /* TVB_NETFLIX   */ 0x010FEF,
+  /* TVB_POWER     */ 0x0D5F2A,   // RCA cmd 54
+  /* TVB_VOL_UP    */ 0x0D0F2F,   // RCA cmd F4   <- capture confirms
+  /* TVB_VOL_DOWN  */ 0x0D1F2E,   // RCA cmd 74
+  /* TVB_CH_UP     */ 0x0D2F2D,   // RCA cmd B4
+  /* TVB_CH_DOWN   */ 0x0D3F2C,   // RCA cmd 34
+  /* TVB_MUTE      */ 0x0C0F3F,   // RCA cmd FC   <- capture confirms
+  /* TVB_INPUT     */ 0x05CFA3,   // RCA cmd C5
+  /* TVB_HOME      */ 0x0F7F08,   // RCA cmd 10
+  /* TVB_BACK      */ 0x0D8F27,   // RCA cmd E4
+  /* TVB_OK        */ 0x00BFF4,   // RCA cmd 2F
+  /* TVB_UP        */ 0x0A6F59,   // RCA cmd 9A
+  /* TVB_DOWN      */ 0x0A7F58,   // RCA cmd 1A   <- capture confirms
+  /* TVB_LEFT      */ 0x0A9F56,   // RCA cmd 6A
+  /* TVB_RIGHT     */ 0x0A8F57,   // RCA cmd EA
+  /* TVB_MENU      */ 0x013FEC,   // RCA cmd 37
+  /* TVB_NETFLIX   */ 0x010FEF,   // RCA cmd F7   <- capture confirms
   /* TVB_POWER_ON  */ TV_NO_CODE,
   /* TVB_POWER_OFF */ TV_NO_CODE,
 };
 
 static const TvModel kModels[] = {
-  { "tcl-nikai", "TCL", "Smart TV", &kNikai, kTclCodes,
-    "Captured from the remote. Power is a toggle -- the same code turns the "
-    "set on and off. Volume down and the channel buttons are not captured "
-    "yet." },
+  { "tcl-nikai", "TCL", "Smart TV (RCA, addr 0F)", &kNikai, kTclCodes,
+    "Power is a toggle -- the same code turns the set on and off. Four of "
+    "these were confirmed against captures from the remote; the rest come "
+    "from the same verified table." },
 };
 static const uint8_t kModelCount = sizeof(kModels) / sizeof(kModels[0]);
 
