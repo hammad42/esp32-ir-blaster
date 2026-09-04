@@ -11,6 +11,7 @@
 
 #include "config.h"
 #include "indicators.h"
+#include "ir_library.h"
 #include "ir_service.h"
 #include "ir_store.h"
 #include "log_ring.h"
@@ -19,6 +20,57 @@
 #include "schedules.h"
 #include "settings.h"
 #include "web_ui.h"
+
+// ---------------------------------------------------------------------------
+// Built-in remote library
+// ---------------------------------------------------------------------------
+
+void WebUi::apiLibProtocols() {
+  if (!guard()) return;
+  String out = F("{\"ok\":true,\"protocols\":");
+  irLibrary.protocolsToJson(out);
+  out += F("}");
+  sendJson(200, out);
+}
+
+/// One handler for preview / send / save, because all three parse the same
+/// body and differ only in what they do afterwards. Preview transmits
+/// nothing, which lets the UI echo back what it understood before anything
+/// is pointed at an appliance.
+void WebUi::apiLibAc(bool send, bool save) {
+  if (!guard()) return;
+  JsonDocument doc;
+  if (!readJsonBody(doc)) return;
+
+  stdAc::state_t st;
+  const char* perr = irLibrary.stateFromJson(doc, &st);
+  if (perr) { sendError(400, perr); return; }
+
+  String j = F("{\"ok\":true,\"summary\":\"");
+  j += irLibrary.describe(st);
+  j += F("\"");
+
+  if (send) {
+    String err;
+    if (!irLibrary.send(st, err)) { sendError(400, err.c_str()); return; }
+  }
+
+  if (save) {
+    const char* name = doc["name"] | "";
+    if (!*name) { sendError(400, "name required to save"); return; }
+    char id[IR_ID_LEN] = {0};
+    const char* serr = irLibrary.save(st, name,
+                                      doc["group"] | "Air Conditioner", id);
+    if (serr) { sendError(400, serr); return; }
+    if (cfg().haDiscovery) mqttManager.republishDiscovery();
+    j += F(",\"id\":\"");
+    j += id;
+    j += F("\"");
+  }
+
+  j += F("}");
+  sendJson(200, j);
+}
 
 // ---------------------------------------------------------------------------
 // Export / import
@@ -74,6 +126,10 @@ void WebUi::apiExport() {
     chunk += m->repeats;
     chunk += F(",\"forceRaw\":");
     chunk += (m->flags & IR_FLAG_FORCE_RAW) ? F("true") : F("false");
+    // Without this a generated command would restore as a raw one, and its
+    // state struct would be transmitted as if it were timings.
+    chunk += F(",\"acState\":");
+    chunk += (m->flags & IR_FLAG_AC_STATE) ? F("true") : F("false");
     chunk += F(",\"frameLens\":[");
     for (uint8_t f = 0; f < frames; f++) {
       if (f) chunk += ',';
@@ -146,7 +202,9 @@ void WebUi::apiImport() {
       doc["name"] | "", doc["group"] | "", doc["protocol"] | -1,
       doc["bits"] | 0, value, doc["khz"] | DEFAULT_FREQ_KHZ,
       doc["repeats"] | DEFAULT_REPEATS,
-      (doc["forceRaw"] | false) ? IR_FLAG_FORCE_RAW : 0, raw, len, frameLens,
+      (uint16_t)(((doc["forceRaw"] | false) ? IR_FLAG_FORCE_RAW : 0) |
+                 ((doc["acState"] | false) ? IR_FLAG_AC_STATE : 0)),
+      raw, len, frameLens,
       frames, id);
   if (err) { sendError(400, err); return; }
 
@@ -593,6 +651,14 @@ void WebUi::begin() {
   // web UI itself is the thing that is broken.
   server_.on("/api/selftest", HTTP_POST, [this]() { apiSelfTest(); });
   server_.on("/api/selftest", HTTP_GET, [this]() { apiSelfTest(); });
+
+  server_.on("/api/library/protocols", HTTP_GET, [this]() { apiLibProtocols(); });
+  server_.on("/api/library/ac/preview", HTTP_POST,
+             [this]() { apiLibAc(false, false); });
+  server_.on("/api/library/ac/send", HTTP_POST,
+             [this]() { apiLibAc(true, false); });
+  server_.on("/api/library/ac/save", HTTP_POST,
+             [this]() { apiLibAc(false, true); });
 
   server_.on("/api/export", HTTP_GET, [this]() { apiExport(); });
   server_.on("/api/import", HTTP_POST, [this]() { apiImport(); });

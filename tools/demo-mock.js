@@ -207,6 +207,30 @@
 
       case '/api/monitor': return { ok: true };
 
+      case '/api/library/protocols':
+        return { ok: true, protocols: [
+          { id: 24, name: 'COOLIX' }, { id: 26, name: 'DAIKIN' },
+          { id: 32, name: 'GREE' },   { id: 41, name: 'MIDEA' },
+          { id: 55, name: 'TCL112AC' }, { id: 58, name: 'SAMSUNG_AC' }] };
+
+      case '/api/library/ac/preview':
+      case '/api/library/ac/send':
+      case '/api/library/ac/save': {
+        const s = (body.protocol || 'GREE') + ' · ' + (body.power ? 'on' : 'off') +
+          ' · ' + (body.mode || 'cool') + ' · ' + (body.degrees || 24) + 'C' +
+          ' · fan ' + (body.fan || 'auto');
+        if (path.endsWith('/save')) {
+          if (!body.name) return { ok: false, error: 'name required to save' };
+          const id = String(CMDS.length + 1).padStart(8, '0');
+          CMDS.push({ id, name: body.name, group: body.group || 'Air Conditioner',
+                      protocol: body.protocol, bits: 448, raw: 56, frames: 1,
+                      khz: 38, repeats: 1, forceRaw: false,
+                      created: Math.floor(Date.now() / 1000) });
+          return { ok: true, summary: s, id };
+        }
+        return { ok: true, summary: s };
+      }
+
       case '/api/selftest':
         return {
           ok: true, pass: true, rxIdleOk: true,

@@ -65,6 +65,10 @@ class WebUi {
   void apiMonitor();
   void apiSelfTest();
 
+  // -- API: built-in remote library --
+  void apiLibProtocols();
+  void apiLibAc(bool send, bool save);
+
   // -- API: import / export --
   void apiExport();
   void apiImport();

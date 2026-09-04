@@ -118,6 +118,12 @@ class IrService {
                 uint16_t bits);
 
   bool busy() const { return txBusy_; }
+
+  /// Lends the transmitter to another module (the built-in library) for one
+  /// burst. Silences the receiver so we never hear ourselves, and returns
+  /// whether it had been listening so endExternalSend() can put it back.
+  bool beginExternalSend();
+  void endExternalSend(bool wasRx, const String& what);
   const String& lastSentName() const { return lastSentName_; }
   uint32_t lastSentAt() const { return lastSentAt_; }
   uint32_t txCount() const { return txCount_; }
