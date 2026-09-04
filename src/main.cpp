@@ -31,6 +31,7 @@
 #include "config.h"
 #include "display.h"
 #include "indicators.h"
+#include "ir_library.h"
 #include "ir_service.h"
 #include "ir_store.h"
 #include "log_ring.h"
@@ -138,6 +139,8 @@ void setup() {
   if (!irService.begin(PIN_IR_RX, PIN_IR_TX)) {
     LOGE("boot: IR driver failed to start");
   }
+
+  irLibrary.begin(PIN_IR_TX);
 
   scheduleManager.begin();
   // Only tidy up orphaned schedules when the command store is actually

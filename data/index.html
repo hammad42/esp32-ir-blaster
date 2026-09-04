@@ -22,6 +22,7 @@
 <nav class="tabs" id="tabs">
   <button class="tab active" data-tab="remotes">Remotes</button>
   <button class="tab" data-tab="learn">Learn</button>
+  <button class="tab" data-tab="library">Library</button>
   <button class="tab" data-tab="schedules">Schedules</button>
   <button class="tab" data-tab="settings">Settings</button>
   <button class="tab" data-tab="system">System</button>
@@ -150,7 +151,109 @@
   </div>
 </section>
 
+<!-- ===================== LIBRARY ====================== -->
+<section id="tab-library" class="panel">
+  <div class="card">
+    <h2>Air conditioner — built in</h2>
+    <p class="muted">
+      Pick your brand and the device builds the codes itself, checksums and all.
+      No remote, no capturing, and every temperature and mode is available —
+      not just the buttons you happened to press.
+    </p>
+
+    <div class="grid2">
+      <label>Brand / protocol
+        <select id="lib-protocol"></select>
+      </label>
+      <label>Mode
+        <select id="lib-mode">
+          <option value="cool">Cool</option>
+          <option value="heat">Heat</option>
+          <option value="dry">Dry</option>
+          <option value="fan">Fan only</option>
+          <option value="auto">Auto</option>
+        </select>
+      </label>
+      <label>Fan speed
+        <select id="lib-fan">
+          <option value="auto">Auto</option>
+          <option value="min">Minimum</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="max">Maximum</option>
+        </select>
+      </label>
+      <div class="field">
+        <label for="lib-degrees">Temperature <b id="lib-degrees-val">24°C</b></label>
+        <input type="range" id="lib-degrees" min="16" max="30" step="1" value="24">
+      </div>
+    </div>
+
+    <div class="row">
+      <label class="switch"><input type="checkbox" id="lib-power" checked><span></span>
+        Power on</label>
+      <label class="switch"><input type="checkbox" id="lib-turbo"><span></span> Turbo</label>
+      <label class="switch"><input type="checkbox" id="lib-econo"><span></span> Eco</label>
+      <label class="switch"><input type="checkbox" id="lib-light"><span></span> Light</label>
+    </div>
+
+    <div class="learn-state">
+      <div class="muted">Will send</div>
+      <div class="learn-big" id="lib-summary" style="font-size:17px">—</div>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" id="btn-lib-send">Test send</button>
+      <span class="muted" id="lib-status"></span>
+    </div>
+    <p class="note">
+      Point the blaster at the unit and press <b>Test send</b>. If it responds,
+      that brand is correct and every other setting will work too.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Save as buttons</h2>
+    <p class="muted">
+      Once a brand works, save the settings you actually use. Saved entries
+      behave like any learned command — they appear under Remotes, work with
+      schedules and MQTT, and are included in backups.
+    </p>
+    <div class="grid2">
+      <label>Name
+        <input id="lib-name" maxlength="32" placeholder="AC Cool 24">
+      </label>
+      <label>Group
+        <input id="lib-group" list="group-options" maxlength="24" value="Air Conditioner">
+      </label>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="btn-lib-save">Save this one</button>
+    </div>
+
+    <details class="advanced">
+      <summary>Save a whole temperature range at once</summary>
+      <p class="note">
+        This is the part that replaces an afternoon of capturing. Creates one
+        command per degree using the mode and fan selected above.
+      </p>
+      <div class="grid2">
+        <label>From <input type="number" id="lib-from" min="16" max="30" value="18"></label>
+        <label>To <input type="number" id="lib-to" min="16" max="30" value="26"></label>
+        <label>Name prefix <input id="lib-prefix" maxlength="20" value="AC Cool"></label>
+      </div>
+      <div class="row">
+        <button class="btn" id="btn-lib-bulk">Create the range</button>
+      </div>
+      <div class="bar" id="lib-bar" hidden><div id="lib-bar-fill"></div></div>
+      <pre class="mono" id="lib-log" hidden></pre>
+    </details>
+  </div>
+</section>
+
 <!-- ==================== SCHEDULES ==================== -->
+
 <section id="tab-schedules" class="panel">
   <div class="card">
     <h2>Add a schedule</h2>

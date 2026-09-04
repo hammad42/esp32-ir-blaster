@@ -301,3 +301,6 @@ details.advanced > summary {
 .scan-name { flex: 1; min-width: 0; overflow: hidden;
              text-overflow: ellipsis; white-space: nowrap; }
 .scan-meta { font-size: 12px; color: var(--muted); flex: none; }
+
+/* Temperature slider in the built-in library. */
+input[type=range] { accent-color: var(--accent); padding: 0; }

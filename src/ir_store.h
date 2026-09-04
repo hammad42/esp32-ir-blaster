@@ -29,6 +29,10 @@
 
 /// Command flags.
 #define IR_FLAG_FORCE_RAW 0x0001   //!< always replay timings, never re-encode
+/// Payload holds an air-conditioner STATE (one byte per entry), not timings.
+/// Sent by handing the bytes back to the library, which re-derives the
+/// waveform and its checksums. See ir_library.h.
+#define IR_FLAG_AC_STATE  0x0002
 
 /// On-disk header. Packed and fixed-size so the payload always starts at a
 /// known offset and we can read metadata without loading the timings.

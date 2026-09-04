@@ -93,6 +93,7 @@ $$('#tabs .tab').forEach((btn) => {
     $$('#tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
     const name = btn.dataset.tab;
     $$('.panel').forEach((p) => p.classList.toggle('active', p.id === 'tab-' + name));
+    if (name === 'library') loadLibrary();
     if (name === 'schedules') loadSchedules();
     if (name === 'settings') loadSettings();
     if (name === 'system') { loadLogs(); }
@@ -852,6 +853,126 @@ $('#btn-factory').onclick = async () => {
     toast('Factory reset — the device is restarting into setup mode', 'ok');
   } catch (e) { toast(e.message, 'bad'); }
 };
+
+
+/* ----------------------------------------------------------------- library */
+
+let LIB_LOADED = false;
+
+async function loadLibrary() {
+  // 65 protocols never change at runtime, so fetch the catalogue once.
+  if (LIB_LOADED) return;
+  try {
+    const r = await api('/api/library/protocols');
+    $('#lib-protocol').innerHTML = r.protocols
+      .map((p) => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
+    // GREE is a sensible landing spot: it is one of the most widely rebadged
+    // controllers, so it is a good first guess for an unbranded unit.
+    const gree = r.protocols.find((p) => p.name === 'GREE');
+    if (gree) $('#lib-protocol').value = 'GREE';
+    LIB_LOADED = true;
+    libPreview();
+  } catch (e) { toast(e.message, 'bad'); }
+}
+
+function libBody(extra) {
+  return Object.assign({
+    protocol: $('#lib-protocol').value,
+    power: $('#lib-power').checked,
+    mode: $('#lib-mode').value,
+    degrees: +$('#lib-degrees').value,
+    fan: $('#lib-fan').value,
+    turbo: $('#lib-turbo').checked,
+    econo: $('#lib-econo').checked,
+    light: $('#lib-light').checked
+  }, extra || {});
+}
+
+// The device's own description is authoritative -- it reflects what the
+// encoder actually understood, which is not always what the form says.
+let libTimer = null;
+function libPreview() {
+  clearTimeout(libTimer);
+  libTimer = setTimeout(async () => {
+    try {
+      const r = await post('/api/library/ac/preview', libBody());
+      $('#lib-summary').textContent = r.summary;
+      $('#lib-status').textContent = '';
+    } catch (e) {
+      $('#lib-summary').textContent = '—';
+      $('#lib-status').textContent = e.message;
+    }
+  }, 200);
+}
+
+['#lib-protocol', '#lib-mode', '#lib-fan', '#lib-degrees', '#lib-power',
+ '#lib-turbo', '#lib-econo', '#lib-light'].forEach((sel) => {
+  const el = $(sel);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    $('#lib-degrees-val').textContent = $('#lib-degrees').value + '\u00B0C';
+    libPreview();
+  });
+});
+
+onClick('#btn-lib-send', async () => {
+  const btn = $('#btn-lib-send');
+  btn.disabled = true;
+  try {
+    const r = await post('/api/library/ac/send', libBody());
+    toast('Sent ' + r.summary, 'ok');
+  } catch (e) { toast(e.message, 'bad'); }
+  finally { btn.disabled = false; }
+});
+
+onClick('#btn-lib-save', async () => {
+  const name = ($('#lib-name').value || '').trim();
+  if (!name) { toast('Give it a name first', 'bad'); return; }
+  try {
+    await post('/api/library/ac/save',
+               libBody({ name, group: $('#lib-group').value.trim() }));
+    $('#lib-name').value = '';
+    await loadCommands();
+    toast('Saved "' + name + '"', 'ok');
+  } catch (e) { toast(e.message, 'bad'); }
+});
+
+onClick('#btn-lib-bulk', async () => {
+  const from = +$('#lib-from').value, to = +$('#lib-to').value;
+  const prefix = ($('#lib-prefix').value || 'AC').trim();
+  const group = $('#lib-group').value.trim();
+  if (!(from >= 16 && to <= 30 && from <= to)) {
+    toast('Range must be between 16 and 30, low to high', 'bad');
+    return;
+  }
+  const total = to - from + 1;
+  if (!confirm(`Create ${total} commands, "${prefix} 16" through "${prefix} ${to}"?`)) return;
+
+  const btn = $('#btn-lib-bulk');
+  const bar = $('#lib-bar'), log = $('#lib-log');
+  btn.disabled = true; bar.hidden = false; log.hidden = false; log.textContent = '';
+
+  let ok = 0, failed = 0, i = 0;
+  for (let t = from; t <= to; t++) {
+    const name = `${prefix} ${t}`;
+    try {
+      // One request per degree: the device encodes each state itself, so this
+      // stays correct even for protocols with odd temperature rules.
+      await post('/api/library/ac/save',
+                 libBody({ degrees: t, name, group }));
+      ok++;
+    } catch (e) {
+      failed++;
+      log.textContent += `${name}: ${e.message}\n`;
+    }
+    i++;
+    $('#lib-bar-fill').style.width = (100 * i / total) + '%';
+  }
+  log.textContent += `\nDone: ${ok} created, ${failed} skipped.`;
+  btn.disabled = false;
+  await loadCommands();
+  toast(`Created ${ok} of ${total}`, failed ? 'bad' : 'ok');
+});
 
 /* -------------------------------------------------------------------- boot */
 

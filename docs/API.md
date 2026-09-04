@@ -160,6 +160,63 @@ when you are done; it keeps the receive interrupt running.
 
 ---
 
+## Built-in library
+
+Air conditioners do not send "temperature up" -- every button transmits the
+unit's whole state, so teaching one by hand means capturing every temperature
+separately. These endpoints let the device build the codes instead, using
+IRremoteESP8266's encoders, so any temperature and mode is available whether or
+not it was ever captured.
+
+### `GET /api/library/protocols`
+
+```json
+{"ok":true,"protocols":[{"id":6,"name":"AIRTON"},{"id":32,"name":"GREE"}]}
+```
+
+Sorted by name. Only protocols this build can *generate* appear; a remote whose
+protocol is missing is still perfectly usable via Learn.
+
+### `POST /api/library/ac/preview` · `/send` · `/save`
+
+All three take the same body and differ only in what they do: **preview**
+transmits nothing and just echoes what the device understood, **send**
+transmits without storing, **save** stores it as an ordinary command.
+
+```bash
+curl -X POST http://ir-blaster.local/api/library/ac/save \
+  -H 'Content-Type: application/json' \
+  -d '{"protocol":"GREE","power":true,"mode":"cool","degrees":24,
+       "fan":"auto","name":"AC Cool 24","group":"Air Conditioner"}'
+```
+
+| Field | Default | Notes |
+|---|---|---|
+| `protocol` | — | **required**, e.g. `GREE`, case-insensitive |
+| `model` | −1 | for brands with variants |
+| `power` | `true` | |
+| `mode` | `"cool"` | `auto` `cool` `heat` `dry` `fan` |
+| `degrees` | `24` | 10–35 °C, or 50–95 with `celsius:false` |
+| `celsius` | `true` | |
+| `fan` | `"auto"` | `auto` `min` `low` `medium` `high` `max` |
+| `swingv` `swingh` | `"off"` | |
+| `quiet` `turbo` `econo` `light` `filter` `clean` `beep` | `false` | not every protocol honours every flag |
+| `sleep` | −1 | minutes, −1 for off |
+| `name` `group` | — | **save only**; group defaults to `Air Conditioner` |
+
+→ `{"ok":true,"summary":"GREE · on · Cool · 24C · fan Auto","id":"0000003a"}`
+
+A saved entry stores the standard state struct rather than timings — about
+40 bytes against ~1.2 KB for the equivalent capture — and is replayed by handing
+it back to the library, so the checksum is always the library's. It behaves like
+any other command everywhere else: Remotes, schedules, MQTT, backup.
+
+A temperature far outside thermostat range is rejected rather than encoded, on
+the grounds that it is far more likely to be Fahrenheit sent with
+`celsius:true` than a real request.
+
+---
+
 ## Backup
 
 ### `GET /api/export`

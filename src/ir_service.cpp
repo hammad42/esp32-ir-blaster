@@ -4,6 +4,7 @@
 #include <esp_task_wdt.h>
 
 #include "indicators.h"
+#include "ir_library.h"
 #include "ir_store.h"
 #include "log_ring.h"
 #include "settings.h"
@@ -335,6 +336,20 @@ bool IrService::sendStored(const char* id, int repeatsOverride, String& err) {
   }
   if (!m) { err = F("unknown command"); return false; }
 
+  // A generated command carries a state struct rather than timings. Hand it
+  // back to the library, which re-derives the waveform and its checksum --
+  // so the encoding stays the library's job, not our copy of it.
+  if (m->flags & IR_FLAG_AC_STATE) {
+    stdAc::state_t st;
+    const char* lerr = irLibrary.load(m->id, &st);
+    if (lerr) { err = lerr; return false; }
+    if (!irLibrary.send(st, err)) return false;
+    lastSentName_ = m->name;   // report the command, not the protocol
+    LOGI("tx: '%s' (generated %s)", m->name,
+         typeToString((decode_type_t)m->protocol, false).c_str());
+    return true;
+  }
+
   uint8_t repeats = (repeatsOverride >= 0) ? (uint8_t)repeatsOverride : m->repeats;
   if (repeats < 1) repeats = 1;
   if (repeats > IR_MAX_REPEATS) repeats = IR_MAX_REPEATS;
@@ -538,6 +553,22 @@ bool IrService::selfTest(SelfTestResult& out, decode_type_t proto,
   monitor_ = wasMonitor;
   if (wasMonitor) recv_->resume();
   return out.matched;
+}
+
+bool IrService::beginExternalSend() {
+  const bool wasRx = rxEnabled_;
+  if (wasRx) setReceiverEnabled(false);
+  txBusy_ = true;
+  indicators.pulseActivity(120);
+  return wasRx;
+}
+
+void IrService::endExternalSend(bool wasRx, const String& what) {
+  txBusy_ = false;
+  if (wasRx) setReceiverEnabled(true);
+  txCount_++;
+  lastSentName_ = what;
+  lastSentAt_ = millis();
 }
 
 bool IrService::sendRawArray(const uint16_t* raw, uint16_t len, uint16_t freqKhz,

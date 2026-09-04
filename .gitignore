@@ -31,3 +31,10 @@ build/
 
 # PlatformIO generates this for clangd; it is machine-specific.
 compile_commands.json
+
+# Local exports of learned commands: user data, not source.
+ir-backup*.json
+ir-recordings*.json
+
+# Unredacted handoff notes: real SSID, MAC and IP. Local only.
+HANDOFF.local.md

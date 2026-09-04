@@ -43,7 +43,24 @@ matters when you are deciding whether to flash a device that is working today.
 
 ### Added
 
-- `tools/ir-backup.sh` -- save, list and restore learned commands over the REST
+- **Built-in air-conditioner library.** 65 protocols -- Gree, Coolix, Midea,
+  Daikin, Electra, Fujitsu, Haier, Hitachi, LG, Samsung, TCL, Toshiba and more
+  -- can now be *generated* rather than captured. Pick a brand, set mode,
+  temperature and fan, and the device encodes the frame itself with the correct
+  checksum, including combinations the remote's buttons never covered. A "save
+  a temperature range" action creates the whole set in one go, which is the
+  part that replaces an afternoon of pressing buttons at a receiver.
+
+  Generated entries are stored as the standard state struct rather than
+  timings: ~40 bytes against ~1.2 KB, the checksum stays the library's rather
+  than a reconstruction of it, and a library upgrade improves existing commands
+  for free. They behave like any other command in Remotes, schedules, MQTT and
+  backups. Costs about 5 % of the flash.
+
+  Protocols the library does not know are unaffected and still captured as raw
+  timings; the two kinds live side by side.
+- `tools/ir-backup.sh`
+ -- save, list and restore learned commands over the REST
   API from a terminal, so a backup can sit in a flashing script rather than
   requiring a trip through the browser.
 
