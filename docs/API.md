@@ -236,6 +236,54 @@ A temperature far outside thermostat range is rejected rather than encoded, on
 the grounds that it is far more likely to be Fahrenheit sent with
 `celsius:true` than a real request.
 
+### `GET /api/library/tv/models`
+
+Televisions work the opposite way to air conditioners. A/C frames carry the
+unit's whole state, so they are *generated*; a TV button is one fixed code with
+no state in it, so there is nothing to derive and the firmware simply holds a
+table of measured values.
+
+→ `{"ok":true,"models":[…],"buttons":[…]}`
+
+Each model lists every button with `true` or `false` for whether a code is
+known:
+
+```json
+{ "id": "tcl-nikai", "brand": "TCL", "model": "Smart TV",
+  "protocol": "NIKAI", "note": "…",
+  "buttons": { "power": true, "vol_up": true, "vol_down": false, … } }
+```
+
+`buttons` at the top level is the canonical id → label list, in display order.
+
+Codes are never guessed. A button with no capture reports `false` and the
+endpoints below refuse it, because a wrong IR code is worse than a missing one:
+a missing button is visibly missing, while a wrong one looks fine and silently
+does nothing.
+
+### `POST /api/library/tv/send` · `/save`
+
+| field | required | notes |
+|---|---|---|
+| `model` | yes | an `id` from `/api/library/tv/models` |
+| `button` | yes | `power`, `vol_up`, `vol_down`, `ch_up`, `ch_down`, … |
+| `name` `group` | — | **save only**; group defaults to `TV` |
+
+```bash
+curl -X POST http://ir-blaster.local/api/library/tv/send \
+     -H 'Content-Type: application/json' \
+     -d '{"model":"tcl-nikai","button":"power"}'
+```
+
+→ `{"ok":true,"label":"Power"}`
+
+Asking for a button the model has no code for returns
+`no code captured for that button yet` rather than transmitting anything.
+
+A saved TV button is stored with both its decoded value and its timings, so it
+replays from the protocol (a clean regenerated frame) and still carries raw
+timings for backup and for `forceRaw`.
+
 ---
 
 ## Backup

@@ -304,3 +304,96 @@ details.advanced > summary {
 
 /* Temperature slider in the built-in library. */
 input[type=range] { accent-color: var(--accent); padding: 0; }
+
+/* ---------- library sub-tabs ---------- */
+
+.subtabs {
+  display: flex; gap: 6px; margin-bottom: 16px;
+  background: var(--panel2); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 4px;
+}
+.subtab {
+  appearance: none; flex: 1; background: none; border: 0; cursor: pointer;
+  color: var(--muted); font-size: 14px; font-weight: 500;
+  padding: 9px 12px; border-radius: calc(var(--radius) - 5px);
+  transition: background .15s, color .15s;
+}
+.subtab:hover { color: var(--text); }
+.subtab.active { background: var(--panel); color: var(--text); }
+
+.lib-pane { display: none; }
+.lib-pane.active { display: block; }
+
+/* ---------- TV remote ---------- */
+
+.tv-remote { margin-top: 16px; }
+
+/* The body is the remote itself: a rounded slab with the buttons laid out
+   the way a hand expects to find them. */
+.tv-remote-body {
+  max-width: 260px; margin: 0 auto; padding: 22px 20px 26px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 34px;
+  display: flex; flex-direction: column; align-items: center; gap: 20px;
+}
+
+.tvb {
+  appearance: none; cursor: pointer; position: relative;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--line); border-radius: 50%;
+  width: 52px; height: 52px;
+  display: grid; place-items: center;
+  font-size: 19px; line-height: 1;
+  transition: transform .09s, background .15s, border-color .15s, box-shadow .15s;
+}
+.tvb:hover:not(:disabled) { border-color: var(--accent); }
+
+/* Pressing should feel like pressing: the button sinks, and a ring pulses
+   outward so a press is visible even when the TV is out of shot. */
+.tvb:active:not(:disabled) { transform: scale(.92); }
+.tvb.sending { border-color: var(--accent); background: var(--accent); color: #fff; }
+.tvb.sending::after {
+  content: ''; position: absolute; inset: -4px; border-radius: 50%;
+  border: 2px solid var(--accent); animation: tvPulse .5s ease-out;
+}
+@keyframes tvPulse {
+  from { opacity: .8; transform: scale(1); }
+  to   { opacity: 0;  transform: scale(1.7); }
+}
+.tvb.failed { border-color: var(--danger); color: var(--danger); }
+
+/* A button with no captured code is shown, not hidden -- a missing button
+   should look missing rather than silently absent. */
+.tvb:disabled {
+  cursor: not-allowed; opacity: .38;
+  border-style: dashed; background: transparent;
+}
+
+.tvb-power { width: 58px; height: 58px; font-size: 22px; }
+.tvb-power:not(:disabled) { color: var(--danger); }
+.tvb-power:not(:disabled):hover { background: var(--danger); color: #fff;
+                                  border-color: var(--danger); }
+
+.tv-rockers { display: flex; gap: 26px; justify-content: center; }
+.tv-rocker {
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  padding: 9px 7px; border-radius: 30px;
+  background: var(--bg); border: 1px solid var(--line);
+}
+.tv-rocker-label {
+  font-size: 10px; letter-spacing: 1.4px; color: var(--muted); font-weight: 600;
+}
+
+.tv-extras { display: flex; flex-wrap: wrap; gap: 9px; justify-content: center; }
+/* Extras carry words rather than glyphs, so they are pills, not circles. */
+.tv-extras .tvb {
+  width: auto; height: auto; border-radius: 999px;
+  padding: 8px 15px; font-size: 12px; font-weight: 600;
+}
+
+.tv-remote-caption { text-align: center; margin-top: 12px; font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tvb, .tvb.sending::after { transition: none; animation: none; }
+}

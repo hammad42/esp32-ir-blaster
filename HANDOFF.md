@@ -191,9 +191,10 @@ Derived from 18 captures off the unit:
 AA 11 <mode|power|turbo> <temp-16> 00 <flags> 00 00 <checksum>
 
 byte 0,1   constant AA 11
-byte 2     bits 0-2 mode, bit 3 power (09 on / 01 off), bit 7 turbo
+byte 2     bits 0-2 mode, bit 3 power (09 on / 01 off), bit 4 dry, bit 7 turbo
+           mode: auto 0, cool 1, dry 2, fan 3, heat 4
 byte 3     temperature - 16   (16 -> 0x00 ... 28 -> 0x0C)
-byte 4     always 00
+byte 4     00, except 01 in auto
 byte 5     base 0x44, bit 7 display light, bit 0 economy
 byte 6,7   always 00
 byte 8     checksum = sum(bytes 0..7) XOR 0xAA
@@ -214,12 +215,167 @@ mark 460, 38 kHz.
 So `16 °C` from the Library produces `AA 11 09 00 00 C4 00 00 22` — the exact
 frame the remote sends.
 
-> **One field is a guess.** Every capture was taken in *cool*, so only
-> `mode = 1` is measured. Heat, dry, fan and auto follow the ordering these
-> controllers usually use and are marked `INFERRED, and NOT verified` in
-> `src/ir_library.cpp`. **Testing those is the top open task** — see §6. If one
-> is wrong, capturing that button from the remote still gives a correct raw
-> command, and the bytes would let the mapping be fixed properly.
+### All five modes are now measured
+
+The mode field used to be the one guess in the protocol. It has since been
+captured one mode at a time off the same remote, and the guess was right —
+**auto 0, cool 1, dry 2, fan 3, heat 4**. Reference frames:
+
+```
+auto  AA 11 08 0A 01 44 00 00 B8      dry   AA 11 1A 09 00 44 00 00 88
+cool  AA 11 09 07 00 44 00 00 A5      fan   AA 11 0B 0B 00 44 00 00 BF
+heat  AA 11 0C 0C 00 44 00 00 BD
+```
+
+Those captures corrected **two things the encoder had wrong**:
+
+- **byte 2 bit 4 (`0x10`) is set in dry, and only in dry.** The remote sends
+  `1A`; the encoder used to send `0A`.
+- **byte 4 is `0x01` in auto**, not the constant `0x00` it was documented as.
+
+Both ride in the checksum and it validates, so they are real bits rather than a
+decode artefact. Each rests on a **single capture per mode**, though, so what
+they *mean* is open — they are reproduced because that is what the remote
+sends, not because the field is understood.
+
+After the fix the encoder reproduces all five frames exactly, and the 13 cool
+temperatures are unchanged (13/13).
+
+**Still not encoded: fan speed.** Byte 5 read `0x44` in all five captures, so
+nothing here separates it. That is the next field to chase.
+
+`tools/dawlance-decode.pl` turns a captured frame back into its nine bytes and
+checks the checksum — this is how the above was derived:
+
+```bash
+curl -s http://$IP/api/export | perl tools/dawlance-decode.pl
+perl tools/dawlance-decode.pl data/presets/dawlance-inverter.json   # 18/18 ok
+```
+
+### The TV half of the Library tab
+
+The Library tab has two sub-tabs, **Air conditioner** and **TV**, and they work
+in opposite directions:
+
+| | A/C | TV |
+|---|---|---|
+| A frame carries | the unit's whole state | one fixed button code |
+| So the firmware | **generates** it | **remembers** it |
+| Source of truth | `IRac` + the Dawlance encoder | a table of measured values |
+
+A TV code cannot be derived — manufacturers assign them arbitrarily — so the
+table only ever holds values read off a real remote. `TV_NO_CODE` marks a button
+that has not been captured; the UI draws it disabled and the endpoints refuse
+it. **Nothing in that table is guessed**, deliberately: a missing button is
+visibly missing, while a wrong one looks fine and silently does nothing.
+
+Adding a model is a row in `kModels` in `src/tv_library.cpp` — protocol,
+timings and the code array. No other firmware change.
+
+#### The 17 models, and how they got there
+
+Sixteen brands were imported from **Flipper-IRDB** (CC0-1.0, ~400 TV files),
+plus TCL from captures. About **2 KB of flash** for the lot.
+
+| Protocol | Brands |
+|---|---|
+| NEC | LG, Hisense, Toshiba, Sharp, Vizio, Hitachi, Philips, Insignia, Element, Sanyo, Westinghouse |
+| SAMSUNG | Samsung, JVC |
+| SONY | Sony, Sceptre |
+| NIKAI | TCL, RCA |
+
+```bash
+perl tools/flipper-import.pl <file.ir>                       # decode to values
+perl tools/flipper-table.pl <file.ir> <id> <Brand> <label>   # emit the C table
+```
+
+**The importer mirrors IRremoteESP8266's own encoders** — `encodeNEC`,
+`encodeSAMSUNG`, `encodeSony` — rather than the protocol documentation, because
+the library encoder is what actually transmits. Anything whose layout has not
+been worked out is **refused, not guessed**: that is why **Panasonic
+(Kaseikyo)** and **Grundig (RC5/RC6)** are absent. Adding them means working
+out those layouts and checking them against a capture.
+
+**Three independent checks, all passed:**
+
+1. Generated **Samsung** codes (`Power E0E040BF`, `Vol+ E0E0E01F`,
+   `Ch+ E0E048B7`…) and **LG** `Power 20DF10EF` match the well-known published
+   values exactly.
+2. Every protocol round-trips through the device's **loopback self-test** — real
+   IR out of the LED, decoded back by the receiver. NEC, SAMSUNG, SONY and
+   NIKAI all pass.
+3. Saved commands' stored timings decode back to their own value: Samsung
+   `0xE0E040BF` (67 entries), Sony `0xA90` (80 entries, 3 frames) — which is
+   what verifies the **mark-modulated** generator, since Sony puts the bit in
+   the mark rather than the space.
+
+> **The database has errors, and the generator now catches one class of them.**
+> `Samsung.ir` lists `Ch_next` and `Ch_prev` on the *same* command (`0x10`).
+> `flipper-table.pl` drops any button sharing a code with another and says so —
+> otherwise that would have shipped as a channel-down button that changed
+> channel the wrong way. A different Samsung file was used instead.
+
+**Presses go through the library encoder**, not the locally generated timings,
+so each protocol gets its own minimum repeat count (Sony will not act on fewer
+than three frames). `TvLibrary::encode()` still builds timings for `save()`,
+because the store needs them.
+
+> **None of the 16 has been tested against a real television.** They are
+> verified as correct waveforms for the codes in the database; whether those
+> codes match any particular set is a separate question. A brand ships many
+> remotes.
+
+#### TCL — the first model, all 16 buttons
+
+The four captures off the remote turned out to be enough to identify the whole
+remote, and this is the method worth reusing for the next brand.
+
+**The protocol is RCA, sent as NIKAI.** IRremoteESP8266 has no RCA encoder, but
+it has NIKAI, and they are the same waveform — 4000/4000 header, 500 µs mark,
+1000/2000 µs spaces. They differ only in which space means one:
+
+| | one | zero |
+|---|---|---|
+| RCA | long (2000 µs) | short (1000 µs) |
+| **NIKAI** | **short (1000 µs)** | **long (2000 µs)** |
+
+So an RCA frame is transmitted by handing the **bitwise complement** of the RCA
+value to NIKAI. Same light, opposite bookkeeping.
+
+> This cost a pass. Decoding a capture with the usual "long space = 1" rule
+> gives the exact complement of the truth, and because the frame carries its own
+> complement it *still self-validates*. It looks right and is entirely wrong.
+
+**The frame** is 24 bits: `[addr:4][cmd:8][~addr:4][~cmd:8]`, every field **LSB
+first**. TCL is address `0x0F`.
+
+**How the table was confirmed.** Flipper-IRDB (CC0-1.0) carries a TCL table
+under protocol RCA, address `0x0F`. Re-encoding its entries with
+`tools/flipper-import.pl` reproduces **all four captured 24-bit values exactly**:
+
+| Captured | Reproduced from the table | Saved as |
+|---|---|---|
+| `0xFEF010` | **Netflix** `F7` | `tcl netflix` ✓ |
+| `0xF2F0D0` | **Vol_up** `F4` | `tcl vol+` ✓ |
+| `0xF3F0C0` | **Mute** `FC` | `tcl power` ✗ |
+| `0xF580A7` | **Down** `1A` | `tcl -` ✗ |
+
+Four exact waveform reproductions, two of which also match the label they were
+saved under. That is what makes the rest of the table trustworthy: it is
+confirmed to be the right family and address, so its other buttons describe the
+same remote.
+
+**Two captures were mislabelled**, which is worth knowing rather than quietly
+fixing: `tcl power` is really **Mute**, and `tcl -` is the d-pad **Down**, not
+volume-down. Real power is cmd `0x54`. The original captures are still in the
+store under their old names.
+
+**Power is a toggle** — one code for on and off, normal for a TV. `power_on` and
+`power_off` stay unknown rather than being aliased onto it, which would make
+"turn off" turn the set on half the time.
+
+> **Still unconfirmed: the television has never been seen reacting.** Every code
+> is verified as a *waveform*, not as an effect. See §6.
 
 ### Preset packs
 
@@ -269,7 +425,9 @@ Body: `protocol` (required) plus `power` `mode` `degrees` `celsius` `fan`
 - Clearing a stored password
 - **Library: 66 protocols listed, preview / send / save all work**
 - **Generated Gree command stores as 56 bytes and sends via the normal path**
-- **Dawlance generation matches captures for every tested combination**
+- **Dawlance generation matches captures for every tested combination** — 13
+  cool temperatures, power on/off, eco, lamp, turbo, and one frame per mode
+  (auto / cool / dry / fan / heat), all byte-exact
 - Watchdog armed; no crashes or brownouts since the 470 µF went in
 
 ---
@@ -278,9 +436,19 @@ Body: `protocol` (required) plus `power` `mode` `degrees` `celsius` `fan`
 
 ### Highest value first
 
-- [ ] **Dawlance modes other than cool.** Library tab → mode **Heat** → Test
-      send. Then dry, fan, auto. This is the one inferred field in the whole
-      protocol. If a mode fails, capture that button and the bytes fix it.
+- [x] ~~**Dawlance modes other than cool.**~~ Done — all five captured and the
+      encoder corrected (§4). The bytes match; **the AC has not yet been made to
+      actually respond in heat / dry / fan / auto**, so send each one at the unit
+      and confirm the display agrees.
+- [x] ~~Capture the three missing TCL buttons.~~ Not needed -- the full 16-button
+      set came from Flipper-IRDB, confirmed against the captures (see §4).
+- [ ] **Press Power on the TV panel with the television in view.** Every code
+      is confirmed *as a waveform* -- four reproduce the captures exactly -- but
+      **the TV has never been observed reacting to any of them**. Power, volume
+      and channel are the ones to watch.
+- [ ] **Find where fan speed lives.** Nothing in the five mode captures moves
+      with it. Capture low / medium / high at a fixed mode and temperature and
+      diff the bytes — byte 5, 6 or 7 are the candidates.
 - [ ] **Measure the range** now the transistor is wired as a low-side switch.
       Walk backwards from the unit and note where it stops.
 - [ ] **Set the timezone.** Still `UTC0`; Pakistan is `PKT-5`. Schedules fire on
@@ -373,7 +541,8 @@ partitions. This cost real captures twice.
 
 ## 8. Open issues
 
-**Dawlance modes other than cool are unverified.** See §4. Top of the list.
+**Dawlance fan speed is not encoded.** No captured byte moves with it yet. See
+§4 and §6. This is now the top open protocol question; the modes are done.
 
 **Finding #6 — receiver lockout after transmit with the monitor active.**
 Reported but never reproduced. Every path was traced and they are balanced.

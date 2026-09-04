@@ -65,14 +65,79 @@ matters when you are deciding whether to flash a device that is working today.
   captures off a real unit:
 
   ```
-  AA 11 <mode|power|turbo> <temp-16> 00 <flags> 00 00 <checksum>
+  AA 11 <mode|power|dry|turbo> <temp-16> <00, or 01 in auto> <flags> 00 00 <checksum>
   checksum = sum(bytes 0..7) XOR 0xAA
   ```
 
   Verified rather than assumed: the checksum agrees with 18 of 18 captures, and
-  the encoder reproduces every one of them byte for byte, on hardware. One field
-  is not verified -- every capture was taken in *cool*, so the other mode values
-  are an educated guess and are marked as such in the source.
+  the encoder reproduces every one of them byte for byte, on hardware.
+- **All five Dawlance modes are now measured**, from one capture per mode off
+  the same remote. The mode values had been an educated guess taken in cool
+  only; the guess turned out to be right (auto 0, cool 1, dry 2, fan 3, heat 4),
+  but the captures corrected two things around it:
+
+  - byte 2 bit 4 (`0x10`) is set in **dry**, and only in dry
+  - byte 4 is `0x01` in **auto**, not the constant `0x00` it was documented as
+
+  The encoder now reproduces all five reference frames exactly, with the 13 cool
+  temperatures unchanged. `tools/dawlance-decode.pl` decodes a captured frame
+  back to its nine bytes and checks the checksum, which is how this was done.
+- **The Library tab is now split into Air conditioner and TV.** The two panes
+  work in opposite directions and it is worth being explicit about why: an A/C
+  frame carries the unit's whole state, so the useful move is to *generate*
+  one; a TV button is a single fixed code with no state in it, so there is
+  nothing to derive and the firmware holds a table of measured values instead.
+
+  The TV pane draws a remote -- power, volume and channel rockers, plus
+  whatever extras the model knows -- and each press transmits directly.
+  **TCL** ships as the first model, decoded from captures off the real remote.
+  Its frame is NIKAI: 24 bits carrying a 12-bit command followed by its 12-bit
+  complement, which every capture satisfies.
+
+  Buttons with no captured code are drawn disabled rather than hidden, and the
+  endpoints refuse them. Nothing here is guessed: a wrong IR code is worse than
+  a missing one, because a missing button is visibly missing while a wrong one
+  looks fine and silently does nothing.
+
+  New: `GET /api/library/tv/models`, `POST /api/library/tv/send` and `/save`.
+- **Sixteen more TV brands**, imported from Flipper-IRDB: Samsung, LG, Sony,
+  Hisense, Toshiba, Sharp, Vizio, Hitachi, JVC, Philips, Insignia, Element,
+  RCA, Sanyo, Westinghouse and Sceptre, across NEC, Samsung32, Sony/SIRC and
+  NIKAI. About 2 KB of flash for the lot.
+
+  `tools/flipper-import.pl` mirrors IRremoteESP8266's own `encodeNEC`,
+  `encodeSAMSUNG` and `encodeSony` rather than the protocol documentation,
+  because the library encoder is what actually transmits. Protocols whose
+  layout has not been worked out -- Kaseikyo, RC5, RC6 -- are **refused**
+  rather than guessed, which is why Panasonic and Grundig are absent.
+
+  Two independent checks: the generated Samsung and LG codes match the
+  well-known published values exactly, and every protocol round-trips through
+  the device's loopback self-test -- real IR out of the LED, decoded back by
+  the receiver.
+
+  `tools/flipper-table.pl` drops any button sharing a code with another and
+  says so. The database does contain such errors: `Samsung.ir` has `Ch_next`
+  and `Ch_prev` both on command 0x10, which would have produced a channel-down
+  button that changed channel the wrong way.
+
+  TV presses now go through the library encoder rather than locally generated
+  timings, so each protocol gets its own minimum repeat count (Sony needs
+  three frames). Generated timings are still stored on save, since that is
+  what a backup carries.
+- **The full TCL button set**, from Flipper-IRDB (CC0-1.0). Four captures off
+  the remote were enough to identify the whole remote: the database carries a
+  TCL table under protocol RCA at address `0x0F`, and re-encoding its entries
+  reproduces all four captured 24-bit values exactly, two of them also matching
+  the label the capture was saved under. Sixteen buttons now work rather than
+  three.
+
+  IRremoteESP8266 has no RCA encoder, but RCA and NIKAI are the same waveform
+  with the one/zero assignment swapped, so an RCA frame is sent as the bitwise
+  complement under NIKAI. `tools/flipper-import.pl` does the conversion.
+
+  Two of the original captures were mislabelled: what was saved as "power" is
+  Mute, and "tcl -" is the d-pad Down, not volume-down.
 - **Preset packs** in `data/presets/`, for remotes the encoder cannot generate.
   The browser fetches a pack and posts each command to `/api/import`, the same
   path a restore takes, so adding a device to the library needs no firmware

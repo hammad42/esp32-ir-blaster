@@ -19,6 +19,7 @@
 #include "net_manager.h"
 #include "schedules.h"
 #include "settings.h"
+#include "tv_library.h"
 #include "web_ui.h"
 
 // ---------------------------------------------------------------------------
@@ -73,6 +74,61 @@ void WebUi::apiLibAc(bool send, bool save) {
     j += F(",\"id\":\"");
     j += id;
     j += F("\"");
+  }
+
+  j += F("}");
+  sendJson(200, j);
+}
+
+void WebUi::apiLibTvModels() {
+  if (!guard()) return;
+  String out = F("{\"ok\":true,\"models\":");
+  tvLibrary.modelsToJson(out);
+  out += F(",\"buttons\":[");
+  // The button order is the firmware's, not the UI's, so the panel always
+  // draws them in a sensible order even if a model is missing some.
+  for (uint8_t b = 0; b < TVB__COUNT; b++) {
+    if (b) out += ',';
+    out += F("{\"id\":\"");
+    out += TvLibrary::buttonName((TvButtonId)b);
+    out += F("\",\"label\":\"");
+    out += TvLibrary::buttonLabel((TvButtonId)b);
+    out += F("\"}");
+  }
+  out += F("]}");
+  sendJson(200, out);
+}
+
+/// Send or save one TV button press. Split from the A/C handler because a TV
+/// carries no state: the whole request is a model and a button name.
+void WebUi::apiLibTv(bool save) {
+  if (!guard()) return;
+  JsonDocument doc;
+  if (!readJsonBody(doc)) return;
+
+  const TvModel* m = tvLibrary.find(doc["model"] | "");
+  if (!m) { sendError(400, "unknown TV model"); return; }
+
+  const TvButtonId b = TvLibrary::buttonFromName(doc["button"] | "");
+  if (b >= TVB__COUNT) { sendError(400, "unknown button"); return; }
+
+  String j = F("{\"ok\":true,\"label\":\"");
+  j += TvLibrary::buttonLabel(b);
+  j += F("\"");
+
+  if (save) {
+    const char* name = doc["name"] | "";
+    if (!*name) { sendError(400, "name required to save"); return; }
+    char id[IR_ID_LEN] = {0};
+    const char* err = tvLibrary.save(*m, b, name, doc["group"] | "TV", id);
+    if (err) { sendError(400, err); return; }
+    if (cfg().haDiscovery) mqttManager.republishDiscovery();
+    j += F(",\"id\":\"");
+    j += id;
+    j += F("\"");
+  } else {
+    const char* err = tvLibrary.send(*m, b);
+    if (err) { sendError(400, err); return; }
   }
 
   j += F("}");
@@ -664,6 +720,11 @@ void WebUi::begin() {
              [this]() { apiLibAc(false, false); });
   server_.on("/api/library/ac/send", HTTP_POST,
              [this]() { apiLibAc(true, false); });
+  server_.on("/api/library/tv/models", HTTP_GET, [this]() { apiLibTvModels(); });
+  server_.on("/api/library/tv/send", HTTP_POST,
+             [this]() { apiLibTv(false); });
+  server_.on("/api/library/tv/save", HTTP_POST,
+             [this]() { apiLibTv(true); });
   server_.on("/api/library/ac/save", HTTP_POST,
              [this]() { apiLibAc(false, true); });
 
