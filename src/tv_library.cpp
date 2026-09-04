@@ -585,6 +585,10 @@ const TvModel* TvLibrary::find(const char* id) const {
 }
 
 void TvLibrary::modelsToJson(String& out) const {
+  // Every string written here is a compile-time literal from the tables above,
+  // so none is escaped. Keep double quotes and backslashes out of brand, model
+  // and note text -- there is a jsonEscape() in web_ui.cpp if that ever stops
+  // being true.
   out += '[';
   for (uint8_t i = 0; i < kModelCount; i++) {
     const TvModel& m = kModels[i];
@@ -659,9 +663,10 @@ bool TvLibrary::encode(const TvModel& m, TvButtonId b, uint16_t* rawOut,
   return true;
 }
 
-/// Shared between send and save: a 2 KB buffer does not belong on the stack,
-/// and the two are never in flight at once (both run to completion inside a
-/// single HTTP handler).
+/// Only save() needs timings -- send() hands the value to the library encoder
+/// instead. Static because 2 KB does not belong on the stack, and safe as a
+/// single shared buffer because a save runs to completion inside one HTTP
+/// handler.
 static uint16_t sTvRaw[IR_MAX_RAW];
 
 const char* TvLibrary::send(const TvModel& m, TvButtonId b) {
