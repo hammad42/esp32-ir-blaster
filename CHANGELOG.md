@@ -100,6 +100,31 @@ matters when you are deciding whether to flash a device that is working today.
   looks fine and silently does nothing.
 
   New: `GET /api/library/tv/models`, `POST /api/library/tv/send` and `/save`.
+- **Sixteen more TV brands**, imported from Flipper-IRDB: Samsung, LG, Sony,
+  Hisense, Toshiba, Sharp, Vizio, Hitachi, JVC, Philips, Insignia, Element,
+  RCA, Sanyo, Westinghouse and Sceptre, across NEC, Samsung32, Sony/SIRC and
+  NIKAI. About 2 KB of flash for the lot.
+
+  `tools/flipper-import.pl` mirrors IRremoteESP8266's own `encodeNEC`,
+  `encodeSAMSUNG` and `encodeSony` rather than the protocol documentation,
+  because the library encoder is what actually transmits. Protocols whose
+  layout has not been worked out -- Kaseikyo, RC5, RC6 -- are **refused**
+  rather than guessed, which is why Panasonic and Grundig are absent.
+
+  Two independent checks: the generated Samsung and LG codes match the
+  well-known published values exactly, and every protocol round-trips through
+  the device's loopback self-test -- real IR out of the LED, decoded back by
+  the receiver.
+
+  `tools/flipper-table.pl` drops any button sharing a code with another and
+  says so. The database does contain such errors: `Samsung.ir` has `Ch_next`
+  and `Ch_prev` both on command 0x10, which would have produced a channel-down
+  button that changed channel the wrong way.
+
+  TV presses now go through the library encoder rather than locally generated
+  timings, so each protocol gets its own minimum repeat count (Sony needs
+  three frames). Generated timings are still stored on save, since that is
+  what a backup carries.
 - **The full TCL button set**, from Flipper-IRDB (CC0-1.0). Four captures off
   the remote were enough to identify the whole remote: the database carries a
   TCL table under protocol RCA at address `0x0F`, and re-encoding its entries

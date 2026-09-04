@@ -1013,7 +1013,9 @@ async function loadTvLibrary() {
   if (TV.loaded) return;
   try {
     const r = await api('/api/library/tv/models');
-    TV.models = r.models || [];
+    // The firmware emits them in table order; a dropdown wants them by name.
+    TV.models = (r.models || []).sort((a, b) =>
+      (a.brand + ' ' + a.model).localeCompare(b.brand + ' ' + b.model));
     TV.buttons = r.buttons || [];
     TV.loaded = true;
 

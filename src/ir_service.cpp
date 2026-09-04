@@ -578,6 +578,32 @@ void IrService::blastRawDirect(const uint16_t* raw, uint16_t len, uint16_t freqK
   feedWdt();
 }
 
+const char* IrService::sendCode(decode_type_t proto, uint64_t value,
+                                uint16_t bits, const char* label) {
+  if (txBusy_) return "transmitter busy, try again in a moment";
+  if (proto <= decode_type_t::UNKNOWN || hasACState(proto) ||
+      proto == (decode_type_t)DAWLANCE_PROTOCOL) {
+    return "that protocol carries a byte array, not a value";
+  }
+
+  const bool wasRx = rxEnabled_;
+  if (wasRx) setReceiverEnabled(false);   // do not hear our own transmission
+  txBusy_ = true;
+  indicators.pulseActivity(120);
+
+  const bool ok = send_->send(proto, value, bits);
+
+  txBusy_ = false;
+  if (wasRx) setReceiverEnabled(true);
+
+  if (!ok) return "the library refused to send that protocol";
+
+  txCount_++;
+  lastSentName_ = (label && *label) ? String(label) : String(F("(code)"));
+  lastSentAt_ = millis();
+  return nullptr;
+}
+
 bool IrService::sendRawArray(const uint16_t* raw, uint16_t len, uint16_t freqKhz,
                              uint8_t repeats, String& err, const char* label) {
   if (txBusy_) { err = F("transmitter busy"); return false; }

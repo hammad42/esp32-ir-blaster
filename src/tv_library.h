@@ -67,24 +67,32 @@ enum TvButtonId : uint8_t {
 };
 
 /**
- * Timing parameters for a pulse-distance protocol.
+ * Timing parameters for one TV protocol.
  *
- * Every TV protocol in here is the same shape -- a header, then one mark per
- * bit with the *space* after it carrying the value, then a stop mark. That is
- * enough to generate the waveform without a per-protocol encoder, which is
- * what lets a new brand be a table row instead of a function.
+ * Every protocol here is a header followed by one mark/space pair per bit, and
+ * they split into two families by *which half of the pair carries the value*:
  *
- * Note @ref oneSpace may be shorter than @ref zeroSpace. NIKAI is such a
- * protocol and getting it backwards produces a frame that looks plausible and
- * decodes to the complement of what was intended.
+ *   space-modulated  the mark is fixed, the space is long or short.
+ *                    NEC, Samsung, NIKAI. (@ref markModulated false)
+ *   mark-modulated   the space is fixed, the mark is long or short.
+ *                    Sony/SIRC. (@ref markModulated true)
+ *
+ * Describing both with one struct is what lets a new brand be a table row
+ * rather than a function.
+ *
+ * Note @ref oneUs may be SHORTER than @ref zeroUs -- NIKAI is such a protocol.
+ * Getting that backwards yields the exact complement of the intended frame,
+ * which for a protocol carrying its own complement still looks self-consistent.
  */
 struct TvProtocol {
   const char* name;
   int16_t     type;        //!< decode_type_t, so the send path can re-encode
   uint16_t    bits;
   uint16_t    hdrMark, hdrSpace;
-  uint16_t    bitMark, oneSpace, zeroSpace;
-  uint16_t    stopMark;
+  bool        markModulated;
+  uint16_t    fixedUs;     //!< the half that never varies
+  uint16_t    oneUs, zeroUs;  //!< the half that carries the bit
+  uint16_t    stopMark;    //!< 0 for protocols with no footer mark (Sony)
   uint16_t    gapUs;       //!< space between repeated frames
   uint8_t     frames;      //!< how many times the remote repeats each press
   bool        msbFirst;

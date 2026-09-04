@@ -272,6 +272,59 @@ visibly missing, while a wrong one looks fine and silently does nothing.
 Adding a model is a row in `kModels` in `src/tv_library.cpp` — protocol,
 timings and the code array. No other firmware change.
 
+#### The 17 models, and how they got there
+
+Sixteen brands were imported from **Flipper-IRDB** (CC0-1.0, ~400 TV files),
+plus TCL from captures. About **2 KB of flash** for the lot.
+
+| Protocol | Brands |
+|---|---|
+| NEC | LG, Hisense, Toshiba, Sharp, Vizio, Hitachi, Philips, Insignia, Element, Sanyo, Westinghouse |
+| SAMSUNG | Samsung, JVC |
+| SONY | Sony, Sceptre |
+| NIKAI | TCL, RCA |
+
+```bash
+perl tools/flipper-import.pl <file.ir>                       # decode to values
+perl tools/flipper-table.pl <file.ir> <id> <Brand> <label>   # emit the C table
+```
+
+**The importer mirrors IRremoteESP8266's own encoders** — `encodeNEC`,
+`encodeSAMSUNG`, `encodeSony` — rather than the protocol documentation, because
+the library encoder is what actually transmits. Anything whose layout has not
+been worked out is **refused, not guessed**: that is why **Panasonic
+(Kaseikyo)** and **Grundig (RC5/RC6)** are absent. Adding them means working
+out those layouts and checking them against a capture.
+
+**Three independent checks, all passed:**
+
+1. Generated **Samsung** codes (`Power E0E040BF`, `Vol+ E0E0E01F`,
+   `Ch+ E0E048B7`…) and **LG** `Power 20DF10EF` match the well-known published
+   values exactly.
+2. Every protocol round-trips through the device's **loopback self-test** — real
+   IR out of the LED, decoded back by the receiver. NEC, SAMSUNG, SONY and
+   NIKAI all pass.
+3. Saved commands' stored timings decode back to their own value: Samsung
+   `0xE0E040BF` (67 entries), Sony `0xA90` (80 entries, 3 frames) — which is
+   what verifies the **mark-modulated** generator, since Sony puts the bit in
+   the mark rather than the space.
+
+> **The database has errors, and the generator now catches one class of them.**
+> `Samsung.ir` lists `Ch_next` and `Ch_prev` on the *same* command (`0x10`).
+> `flipper-table.pl` drops any button sharing a code with another and says so —
+> otherwise that would have shipped as a channel-down button that changed
+> channel the wrong way. A different Samsung file was used instead.
+
+**Presses go through the library encoder**, not the locally generated timings,
+so each protocol gets its own minimum repeat count (Sony will not act on fewer
+than three frames). `TvLibrary::encode()` still builds timings for `save()`,
+because the store needs them.
+
+> **None of the 16 has been tested against a real television.** They are
+> verified as correct waveforms for the codes in the database; whether those
+> codes match any particular set is a separate question. A brand ships many
+> remotes.
+
 #### TCL — the first model, all 16 buttons
 
 The four captures off the remote turned out to be enough to identify the whole

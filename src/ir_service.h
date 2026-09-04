@@ -105,6 +105,14 @@ class IrService {
   bool sendRawArray(const uint16_t* raw, uint16_t len, uint16_t freqKhz,
                     uint8_t repeats, String& err, const char* label = nullptr);
 
+  /// Transmits a simple protocol code by value, letting the library build the
+  /// waveform. Preferred over sendRawArray() whenever the protocol is one
+  /// IRremoteESP8266 knows: its encoder is authoritative, and it applies each
+  /// protocol's minimum repeat count itself (Sony needs three frames).
+  /// @return an error string, or nullptr on success.
+  const char* sendCode(decode_type_t proto, uint64_t value, uint16_t bits,
+                       const char* label = nullptr);
+
   /**
    * Loopback self-test: transmits a known frame with the receiver left ON,
    * and checks the same frame comes back. Requires the IR LED to be pointing
