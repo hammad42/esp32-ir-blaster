@@ -42,6 +42,25 @@ matters when you are deciding whether to flash a device that is working today.
   fails; it says what it is about to erase first.
 
 ### Added
+- **Scheduled fires now leave evidence.** A schedule runs when nobody is
+  watching, so "it was configured correctly" was the only assurance on offer.
+  The blaster now keeps its receiver listening *through* a scheduled
+  transmission and writes down what it heard itself send.
+
+  The Schedules tab gained a **What actually fired** card showing the last 16
+  fires, each as one of three outcomes: **heard** (the signal left the
+  blaster), **not heard** (the send returned success but nothing came back --
+  suspect the emitter), or **failed** (the send was refused). Where the
+  receiver decoded a known protocol the log records it; an A/C shows as
+  `UNKNOWN` with a timing count, which is normal.
+
+  `heard` means the transistor switched and the LED lit. It does **not** mean
+  the appliance obeyed -- an air conditioner sends no reply, so nothing can
+  confirm that from the blaster. The UI says so rather than implying more.
+
+  Kept in `/firelog.json`, apart from `/schedules.json` so that rewriting it
+  after every fire cannot endanger the schedules themselves. Survives a reboot.
+  New: `GET /api/schedules/log`, `POST /api/schedules/log/clear`.
 
 - **Built-in air-conditioner library.** 65 protocols -- Gree, Coolix, Midea,
   Daikin, Electra, Fujitsu, Haier, Hitachi, LG, Samsung, TCL, Toshiba and more

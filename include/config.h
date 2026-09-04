@@ -107,9 +107,22 @@
 // --------------------------------------------------------------------------
 #define MAX_SCHEDULES 24
 
+/// How many past fires the schedule log keeps. A schedule that runs unattended
+/// is only trustworthy if it leaves evidence, so each fire records what went
+/// out and what the receiver overheard coming back.
+#define SCHED_LOG_MAX 16
+/// How long to listen for our own transmission after a scheduled fire. The
+/// longest frame here is a two-part A/C burst at ~120 ms, so this leaves room
+/// without stalling the loop for long.
+#define SCHED_ECHO_WAIT_MS 400
+
 // --------------------------------------------------------------------------
 // Storage layout (LittleFS)
 // --------------------------------------------------------------------------
 #define IR_DIR          "/ir"
 #define SCHEDULES_FILE  "/schedules.json"
+/// Kept apart from SCHEDULES_FILE on purpose: this is rewritten after every
+/// fire, and a rewrite that goes wrong must not be able to take the schedules
+/// themselves with it.
+#define SCHED_LOG_FILE  "/firelog.json"
 #define NVS_NAMESPACE   "irblaster"

@@ -180,8 +180,9 @@ protocol is missing is still perfectly usable via Learn.
 The list is the 65 IRremoteESP8266 supports plus **`DAWLANCE`**, which is
 implemented here because the library does not know it. Its frame is 72 bits over
 a 6.7/3.3 ms header and matches no protocol upstream, so captures from those
-remotes decode as `UNKNOWN`. Only `mode: "cool"` is verified against real
-hardware; the other modes are inferred.
+remotes decode as `UNKNOWN`. All five modes are verified against captures from
+a real remote, including the two bytes those captures corrected — see the
+Dawlance section of `HANDOFF.md`.
 
 ### Preset packs
 
@@ -260,6 +261,37 @@ Codes are never guessed. A button with no capture reports `false` and the
 endpoints below refuse it, because a wrong IR code is worse than a missing one:
 a missing button is visibly missing, while a wrong one looks fine and silently
 does nothing.
+
+### `GET /api/schedules/log` · `POST /api/schedules/log/clear`
+
+What scheduled fires actually did, newest first. A schedule runs unattended, so
+each fire records both halves: what went out, and what the receiver overheard
+coming back while it went.
+
+```json
+{ "at": 1772668800, "scheduleId": 1, "label": "Bedtime AC off",
+  "command": "AC_Off", "txOk": true, "heard": true,
+  "protocol": "UNKNOWN", "bits": 0, "rawLen": 291, "value": "0x0",
+  "error": "" }
+```
+
+| field | means |
+|---|---|
+| `txOk` | the firmware transmitted without error |
+| `heard` | the receiver decoded the blaster's own transmission |
+| `protocol` `bits` `value` `rawLen` | what came back; `UNKNOWN` with a `rawLen` is normal for an A/C |
+| `error` | why the send failed, when `txOk` is false |
+
+`heard` is the useful one. `txOk` only says the firmware tried; `heard` says
+the transistor switched and the LED lit. **Neither can say the appliance
+reacted** -- an air conditioner sends no reply -- so a heard fire means the
+blaster worked, not that the room got cooler.
+
+The log holds the last 16 fires in `/firelog.json`, kept apart from
+`/schedules.json` so rewriting it after every fire cannot endanger the
+schedules themselves. It survives a reboot.
+
+---
 
 ### `POST /api/library/tv/send` · `/save`
 

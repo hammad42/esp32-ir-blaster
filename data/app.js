@@ -542,7 +542,50 @@ function fillCommandPickers() {
   if (keep) sel.value = keep;
 }
 
+/* Three outcomes worth telling apart, because they point at different faults:
+   the send failed (firmware/storage), it succeeded but nothing came back (the
+   emitter), or it was heard (the blaster is fine, look at the appliance). */
+function fireVerdict(f) {
+  if (!f.txOk) return { cls: 'bad',  text: 'failed', detail: f.error || 'the send was refused' };
+  if (!f.heard) return { cls: 'warn', text: 'not heard',
+                         detail: 'sent, but the receiver heard nothing come back' };
+  const what = (f.protocol === 'UNKNOWN')
+    ? `${f.rawLen} timings`
+    : `${f.protocol}, ${f.bits} bits, ${f.value}`;
+  return { cls: 'ok', text: 'heard', detail: 'received ' + what };
+}
+
+async function loadFireLog() {
+  try {
+    const r = await api('/api/schedules/log');
+    const box = $('#fire-log');
+    if (!box) return;
+    if (!r.fires || !r.fires.length) {
+      box.innerHTML = '<p class="empty">No schedule has fired yet.</p>';
+      return;
+    }
+    box.innerHTML = r.fires.map((f) => {
+      const v = fireVerdict(f);
+      const when = f.at ? new Date(f.at * 1000).toLocaleString() : 'unknown time';
+      return `<div class="fire">
+        <span class="pill ${v.cls}">${v.text}</span>
+        <div class="grow">
+          <div>${esc(f.label)} <span class="muted">→ ${esc(f.command)}</span></div>
+          <div class="cmd-meta">${esc(when)} · ${esc(v.detail)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) { /* the tab is still usable without the log */ }
+}
+
+onClick('#btn-fire-clear', async () => {
+  if (!confirm('Clear the record of past fires?')) return;
+  try { await post('/api/schedules/log/clear', {}); loadFireLog(); }
+  catch (e) { toast(e.message, 'bad'); }
+});
+
 async function loadSchedules() {
+  loadFireLog();
   try {
     const r = await api('/api/schedules');
     $('#sch-clock').textContent = r.now ? 'Device clock: ' + r.now : '';

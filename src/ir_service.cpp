@@ -361,7 +361,7 @@ bool IrService::sendStored(const char* id, int repeatsOverride, String& err) {
                       m->bits == 0 || hasACState(proto) || proto == (decode_type_t)DAWLANCE_PROTOCOL;
 
   const bool wasRx = rxEnabled_;
-  if (wasRx) setReceiverEnabled(false);   // do not hear our own transmission
+  if (wasRx && !listenWhileSending_) setReceiverEnabled(false);
   txBusy_ = true;
   indicators.pulseActivity(120);
 
@@ -389,7 +389,7 @@ bool IrService::sendStored(const char* id, int repeatsOverride, String& err) {
   }
 
   txBusy_ = false;
-  if (wasRx) setReceiverEnabled(true);
+  if (wasRx && !listenWhileSending_) setReceiverEnabled(true);
 
   if (ok) {
     txCount_++;
@@ -399,6 +399,55 @@ bool IrService::sendStored(const char* id, int repeatsOverride, String& err) {
   } else {
     LOGE("tx: '%s' failed: %s", m->name, err.c_str());
   }
+  return ok;
+}
+
+bool IrService::sendStoredVerified(const char* id, int repeatsOverride,
+                                   FireEcho* echo, String& err) {
+  if (echo) *echo = FireEcho();
+
+  // An armed learn owns the receiver. Stealing it here would consume the
+  // capture the user is standing in front of the blaster waiting for, so the
+  // fire goes out unverified instead. Missing evidence beats a lost capture.
+  if (learnState_ == LearnState::Waiting) {
+    return sendStored(id, repeatsOverride, err);
+  }
+
+  const bool wasRx = rxEnabled_;
+  const bool wasMonitor = monitor_;
+  monitor_ = false;   // the echo is ours, not traffic worth reporting
+
+  // Listen to ourselves, deliberately. resume() is only safe on a receiver
+  // that is actually enabled -- calling it on a stopped one dereferences a
+  // timer that disableIRIn() has already freed.
+  setReceiverEnabled(true);
+  recv_->resume();
+
+  listenWhileSending_ = true;
+  const bool ok = sendStored(id, repeatsOverride, err);
+  listenWhileSending_ = false;
+
+  if (ok && echo) {
+    const uint32_t deadline = millis() + SCHED_ECHO_WAIT_MS;
+    while ((int32_t)(millis() - deadline) < 0) {
+      if (recv_->decode(&results_)) {
+        echo->heard = true;
+        echo->protocol = (int16_t)results_.decode_type;
+        echo->value = results_.value;
+        echo->bits = results_.bits;
+        echo->rawLen = getCorrectedRawLength(&results_);
+        rxCount_++;
+        break;
+      }
+      delay(5);
+      feedWdt();
+    }
+    recv_->resume();
+  }
+
+  setReceiverEnabled(wasRx || wasMonitor);
+  monitor_ = wasMonitor;
+  if (wasMonitor) recv_->resume();
   return ok;
 }
 
@@ -558,7 +607,8 @@ bool IrService::selfTest(SelfTestResult& out, decode_type_t proto,
 
 bool IrService::beginExternalSend() {
   const bool wasRx = rxEnabled_;
-  if (wasRx) setReceiverEnabled(false);
+  // A verified send wants to overhear itself; every other send does not.
+  if (wasRx && !listenWhileSending_) setReceiverEnabled(false);
   txBusy_ = true;
   indicators.pulseActivity(120);
   return wasRx;
@@ -566,7 +616,7 @@ bool IrService::beginExternalSend() {
 
 void IrService::endExternalSend(bool wasRx, const String& what) {
   txBusy_ = false;
-  if (wasRx) setReceiverEnabled(true);
+  if (wasRx && !listenWhileSending_) setReceiverEnabled(true);
   txCount_++;
   lastSentName_ = what;
   lastSentAt_ = millis();

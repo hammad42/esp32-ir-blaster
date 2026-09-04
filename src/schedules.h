@@ -12,6 +12,7 @@
 #include <Arduino.h>
 
 #include "config.h"
+#include "ir_service.h"   // FireEcho -- what the receiver overheard
 
 struct Schedule {
   uint8_t  id;             //!< 1..MAX_SCHEDULES, 0 = free slot
@@ -25,10 +26,41 @@ struct Schedule {
   int32_t  lastFiredMin;   //!< minutes-since-epoch of the last run, -1 = never
 };
 
+/**
+ * What one scheduled fire actually did.
+ *
+ * A schedule runs when nobody is watching, so "it was configured correctly" is
+ * not evidence that anything happened. Each fire therefore records both halves:
+ * what went out, and what the receiver overheard coming back while it went.
+ *
+ * The echo is the useful part. `txOk` only says the firmware tried; `heard`
+ * says the transistor switched and the LED lit. Neither can say the appliance
+ * reacted -- an air conditioner sends no reply -- so a heard fire means the
+ * blaster worked, not that the room got cooler.
+ */
+struct FireLogEntry {
+  uint32_t at;             //!< epoch seconds, 0 = empty slot
+  uint8_t  scheduleId;
+  bool     txOk;           //!< the transmit call succeeded
+  bool     heard;          //!< the receiver decoded our own transmission
+  int16_t  protocol;       //!< what came back; -1 = UNKNOWN, which is normal
+  uint16_t bits;           //!< for an A/C or any raw replay
+  uint16_t rawLen;
+  uint64_t value;
+  char     label[IR_NAME_MAX];    //!< the schedule's label, or its time
+  char     command[IR_NAME_MAX];  //!< the command it was pointed at
+  char     error[48];             //!< why the transmit failed, if it did
+};
+
 class ScheduleManager {
  public:
   void begin();
   void loop();
+
+  /// Past fires, newest first. Survives a reboot; capped at SCHED_LOG_MAX.
+  uint8_t logCount() const { return logCount_; }
+  const FireLogEntry* logAt(uint8_t i) const;
+  void clearLog();
 
   uint8_t count() const { return count_; }
   const Schedule* at(uint8_t i) const { return i < count_ ? &items_[i] : nullptr; }
@@ -48,9 +80,21 @@ class ScheduleManager {
   void load();
   int  indexOf(uint8_t id) const;
 
+  void loadLog();
+  bool saveLog();
+  void recordFire(const Schedule& s, const char* commandName, bool txOk,
+                  const FireEcho& echo, const char* err);
+
   Schedule items_[MAX_SCHEDULES];
   uint8_t  count_ = 0;
   uint32_t lastCheck_ = 0;
+
+  // A ring, newest at (logHead_ - 1). Kept in its own file rather than in
+  // schedules.json so that rewriting it after every fire cannot endanger the
+  // schedules themselves.
+  FireLogEntry log_[SCHED_LOG_MAX];
+  uint8_t      logCount_ = 0;
+  uint8_t      logHead_ = 0;
 };
 
 extern ScheduleManager scheduleManager;

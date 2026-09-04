@@ -370,6 +370,25 @@
     </p>
   </div>
   <div id="schedule-list"></div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;align-items:baseline">
+      <h2 style="margin:0">What actually fired</h2>
+      <button class="btn" id="btn-fire-clear">Clear</button>
+    </div>
+    <p class="muted">
+      A schedule runs when nobody is watching, so each one records what it did.
+      The blaster keeps its receiver listening through a scheduled send and
+      writes down what it heard itself transmit — which is the only evidence
+      available that the LED really lit.
+    </p>
+    <p class="note">
+      <b>Heard</b> means the signal left the blaster. It does <b>not</b> mean the
+      appliance obeyed — an air conditioner sends nothing back, so nothing can
+      confirm that from here.
+    </p>
+    <div id="fire-log"></div>
+  </div>
 </section>
 
 <!-- ==================== SETTINGS ===================== -->
