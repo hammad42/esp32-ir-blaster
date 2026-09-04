@@ -66,6 +66,36 @@ causes.
 > normal use the receiver is switched off during a send, so a blaster never
 > captures its own output.
 
+## The Library tab — before you teach anything
+
+If you have an air conditioner, try this **before** capturing a single button.
+
+An A/C remote never sends "temperature up": every button transmits the unit's
+whole state. Teaching one by hand therefore means capturing every temperature
+separately, and you still cannot use a combination you never pressed.
+
+The **Library** tab avoids all of that for 66 protocols. Pick your brand, set
+mode, temperature and fan, and the device builds the frame itself with the
+correct checksum.
+
+1. **Library** tab → choose your brand. Gree is a reasonable first guess for an
+   unbranded unit; it is one of the most widely rebadged controllers.
+2. Set mode and temperature. The summary line shows exactly what will be sent.
+3. Point the blaster at the unit and press **Test send**.
+4. If it responds, that brand is right — and every other setting will work too.
+
+Then save the ones you actually use. **"Save a whole temperature range at
+once"** creates one command per degree in a single click, which is the part
+that replaces an afternoon at the receiver.
+
+Saved entries behave like any learned command: they appear under Remotes, work
+with schedules and MQTT, and are included in backups. They are stored as a
+compact state description rather than raw timings, so they take about 56 bytes
+each instead of 1.2 KB.
+
+If no brand works, nothing is lost — capture from the remote as below. Raw
+captures and generated commands live side by side.
+
 ## Learning a command
 
 1. Open the **Learn** tab.

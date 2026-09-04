@@ -177,6 +177,27 @@ not it was ever captured.
 Sorted by name. Only protocols this build can *generate* appear; a remote whose
 protocol is missing is still perfectly usable via Learn.
 
+The list is the 65 IRremoteESP8266 supports plus **`DAWLANCE`**, which is
+implemented here because the library does not know it. Its frame is 72 bits over
+a 6.7/3.3 ms header and matches no protocol upstream, so captures from those
+remotes decode as `UNKNOWN`. Only `mode: "cool"` is verified against real
+hardware; the other modes are inferred.
+
+### Preset packs
+
+For remotes that cannot be generated at all, `data/presets/index.json` lists
+ready-made packs of captured commands, each a static file served from the
+device. They install through `/api/import` one command at a time -- the same
+path a restore takes -- so a pack needs no firmware support:
+
+```bash
+curl -s http://ir-blaster.local/presets/index.json
+jq -c '.commands[]' pack.json | while read -r c; do
+  curl -sS -X POST http://ir-blaster.local/api/import \
+       -H 'Content-Type: application/json' -d "$c"; echo
+done
+```
+
 ### `POST /api/library/ac/preview` · `/send` · `/save`
 
 All three take the same body and differ only in what they do: **preview**
