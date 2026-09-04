@@ -59,8 +59,26 @@ matters when you are deciding whether to flash a device that is working today.
 
   Protocols the library does not know are unaffected and still captured as raw
   timings; the two kinds live side by side.
-- `tools/ir-backup.sh`
- -- save, list and restore learned commands over the REST
+- **Dawlance air conditioners are now a generated protocol.** Not supported by
+  IRremoteESP8266 -- their 72-bit frame over a 6.7/3.3 ms header matches nothing
+  there, which is why captures decode as `UNKNOWN`. Reverse engineered from 18
+  captures off a real unit:
+
+  ```
+  AA 11 <mode|power|turbo> <temp-16> 00 <flags> 00 00 <checksum>
+  checksum = sum(bytes 0..7) XOR 0xAA
+  ```
+
+  Verified rather than assumed: the checksum agrees with 18 of 18 captures, and
+  the encoder reproduces every one of them byte for byte, on hardware. One field
+  is not verified -- every capture was taken in *cool*, so the other mode values
+  are an educated guess and are marked as such in the source.
+- **Preset packs** in `data/presets/`, for remotes the encoder cannot generate.
+  The browser fetches a pack and posts each command to `/api/import`, the same
+  path a restore takes, so adding a device to the library needs no firmware
+  change -- only a new file and a line in `index.json`. `tools/make-preset.sh`
+  builds one from any backup.
+- `tools/ir-backup.sh` -- save, list and restore learned commands over the REST
   API from a terminal, so a backup can sit in a flashing script rather than
   requiring a trip through the browser.
 
