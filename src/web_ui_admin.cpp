@@ -226,9 +226,9 @@ void WebUi::apiExport() {
     firstCmd = false;
 
     chunk += F("{\"name\":\"");
-    chunk += m->name;
+    chunk += jsonEscape(m->name);
     chunk += F("\",\"group\":\"");
-    chunk += m->group;
+    chunk += jsonEscape(m->group);
     chunk += F("\",\"protocol\":");
     chunk += m->protocol;
     chunk += F(",\"bits\":");
@@ -522,7 +522,7 @@ void WebUi::apiGetSchedules() {
     out += F(",\"cmd\":\"");
     out += s->commandId;
     out += F("\",\"label\":\"");
-    out += s->label;
+    out += jsonEscape(s->label);
     out += F("\"}");
   }
   out += F("]}");

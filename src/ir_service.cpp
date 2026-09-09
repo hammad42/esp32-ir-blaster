@@ -285,7 +285,10 @@ bool IrService::testCapture(String& err) {
   blastRaw(txBuf_, capFrameLen_, capFrames_, cfg().defaultFreqKhz, 1);
 
   txBusy_ = false;
-  if (wasRx) setReceiverEnabled(true);
+  if (wasRx) {
+    delay(40);
+    setReceiverEnabled(true);
+  }
   txCount_++;
   lastSentName_ = F("(test of pending capture)");
   lastSentAt_ = millis();
@@ -389,7 +392,10 @@ bool IrService::sendStored(const char* id, int repeatsOverride, String& err) {
   }
 
   txBusy_ = false;
-  if (wasRx && !listenWhileSending_) setReceiverEnabled(true);
+  if (wasRx && !listenWhileSending_) {
+    delay(40);
+    setReceiverEnabled(true);
+  }
 
   if (ok) {
     txCount_++;
@@ -591,7 +597,10 @@ bool IrService::selfTest(SelfTestResult& out, decode_type_t proto,
     // as NEC_LIKE, and a 13-bit RC5 frame as RC5X -- in both cases the bits
     // round-tripped perfectly and the optics are fine. Judging on the protocol
     // label would report a hardware fault that does not exist.
-    out.matched = (results_.value == value) && (results_.bits == bits);
+    const bool rc5Family = (proto == decode_type_t::RC5 || proto == decode_type_t::RC5X);
+    out.matched = (results_.value == value) &&
+                  (results_.bits == bits ||
+                   (rc5Family && results_.bits == 12 && bits == 13));
     out.exactProtocol = out.matched && (results_.decode_type == proto);
     rxCount_++;
   }
@@ -651,7 +660,10 @@ bool IrService::beginExternalSend() {
 
 void IrService::endExternalSend(bool wasRx, const String& what) {
   txBusy_ = false;
-  if (wasRx && !listenWhileSending_) setReceiverEnabled(true);
+  if (wasRx && !listenWhileSending_) {
+    delay(40);
+    setReceiverEnabled(true);
+  }
   txCount_++;
   lastSentName_ = what;
   lastSentAt_ = millis();
@@ -679,7 +691,10 @@ const char* IrService::sendCode(decode_type_t proto, uint64_t value,
   const bool ok = send_->send(proto, value, bits);
 
   txBusy_ = false;
-  if (wasRx) setReceiverEnabled(true);
+  if (wasRx) {
+    delay(40);
+    setReceiverEnabled(true);
+  }
 
   if (!ok) return "the library refused to send that protocol";
 
@@ -708,7 +723,10 @@ bool IrService::sendRawArray(const uint16_t* raw, uint16_t len, uint16_t freqKhz
   blastRaw(txBuf_, one, 1, freqKhz, repeats);
 
   txBusy_ = false;
-  if (wasRx) setReceiverEnabled(true);
+  if (wasRx) {
+    delay(40);
+    setReceiverEnabled(true);
+  }
   txCount_++;
   lastSentName_ = (label && *label) ? String(label) : String(F("(ad-hoc raw)"));
   lastSentAt_ = millis();

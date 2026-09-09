@@ -200,6 +200,11 @@ void WebUi::handleNotFound() {
     sendError(400, "bad path");
     return;
   }
+  // Deny-list known data files from being served as static assets
+  if (path == "/schedules.json" || path == "/firelog.json") {
+    server_.send(404, "text/plain", "Not found");
+    return;
+  }
   if (!guard()) return;
   if (serveFromFs(path)) return;
 
@@ -352,7 +357,11 @@ void WebUi::apiSendRaw() {
   uint16_t* buf = (uint16_t*)malloc((size_t)n * 2);
   if (!buf) { sendError(507, "out of memory"); return; }
   uint16_t i = 0;
-  for (JsonVariant v : arr) buf[i++] = (uint16_t)v.as<uint32_t>();
+  for (JsonVariant v : arr) {
+    const int32_t t = v.as<int32_t>();
+    if (t < 0) { free(buf); sendError(400, "raw timings must be >= 0"); return; }
+    buf[i++] = (uint16_t)t;
+  }
 
   String err;
   const bool ok = irService.sendRawArray(buf, n, doc["khz"] | DEFAULT_FREQ_KHZ,

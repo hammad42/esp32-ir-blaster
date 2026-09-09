@@ -38,3 +38,9 @@ ir-recordings*.json
 
 # Unredacted handoff notes: real SSID, MAC and IP. Local only.
 HANDOFF.local.md
+BUGFIX-HANDOFF.md
+
+# Hardware tests and exports
+hw-export.json
+hw-test-log.txt
+hw-test.ps1

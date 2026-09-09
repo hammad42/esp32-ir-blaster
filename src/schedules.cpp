@@ -209,7 +209,7 @@ const char* ScheduleManager::upsert(uint8_t id, bool enabled, uint8_t hour,
                                     const char* commandId, const char* label,
                                     uint8_t* outId) {
   if (hour > 23 || minute > 59) return "invalid time";
-  if ((dow & 0x7F) == 0) return "pick at least one day";
+  if (dow == 0 || dow > 0x7F) return "invalid day selection";
   if (repeats > IR_MAX_REPEATS) return "repeats out of range";
   if (!commandId || !irStore.find(commandId)) return "unknown command";
 
@@ -232,7 +232,7 @@ const char* ScheduleManager::upsert(uint8_t id, bool enabled, uint8_t hour,
   s->enabled = enabled;
   s->hour = hour;
   s->minute = minute;
-  s->dow = dow & 0x7F;
+  s->dow = dow;
   s->repeats = repeats;
   copyStr(s->commandId, sizeof(s->commandId), commandId);
   copyStr(s->label, sizeof(s->label), label ? label : "");
